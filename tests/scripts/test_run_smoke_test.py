@@ -1,0 +1,164 @@
+import pytest
+from click.testing import CliRunner
+from scripts.run_smoke_test import run_smoke_test
+
+# SMOKE_TEST_RESULTS_DIR can be imported for assertion, but patching
+# it in the script's namespace is more direct for tests.
+# from scripts.run_smoke_test import SMOKE_TEST_RESULTS_DIR as SCRIPT_DEFAULT_DIR
+import os
+import json
+import shutil  # For cleaning up directories
+from unittest import mock  # Use unittest.mock for mocking
+from pathlib import Path
+
+# Define a directory for test outputs to avoid cluttering the main smoke_tests dir
+# Using Path for robust path construction
+TEST_OUTPUT_BASE_DIR = Path("tests/temp_smoke_test_outputs")
+
+
+@pytest.fixture(scope="function", autouse=True)
+def manage_test_output_dir():
+    """Creates and cleans up the test output directory for each test function."""
+    if TEST_OUTPUT_BASE_DIR.exists():
+        shutil.rmtree(TEST_OUTPUT_BASE_DIR)
+    TEST_OUTPUT_BASE_DIR.mkdir(parents=True, exist_ok=True)
+
+    yield  # Test runs here
+
+    # Clean up after tests by removing the temp directory
+    if TEST_OUTPUT_BASE_DIR.exists():
+        shutil.rmtree(TEST_OUTPUT_BASE_DIR)
+
+
+@mock.patch("scripts.run_smoke_test.deploy_landing_page_to_unbounce")
+@mock.patch("scripts.run_smoke_test.create_google_ads_campaign")
+@mock.patch("scripts.run_smoke_test.get_campaign_metrics")
+# Patch SMOKE_TEST_RESULTS_DIR in the script's context
+@mock.patch("scripts.run_smoke_test.SMOKE_TEST_RESULTS_DIR", str(TEST_OUTPUT_BASE_DIR))
+def test_run_smoke_test_successful_flow(
+    mock_get_metrics, mock_create_campaign, mock_deploy_page
+):
+    """Tests the successful execution flow of the run_smoke_test CLI command."""
+    # Setup mock return values
+    mock_deploy_page.return_value = "http://mockpages.com/test-idea-xyz"
+    mock_create_campaign.return_value = "mock-campaign-id-xyz-123"
+    mock_metrics_data = {
+        "clicks": 150,
+        "conversions": 15,
+        "ctr": 0.15,
+        "campaign_id": "mock-campaign-id-xyz-123",
+    }
+    mock_get_metrics.return_value = mock_metrics_data
+
+    runner = CliRunner()
+    idea_id_to_test = "test-idea-xyz"
+    budget_to_test = "75.0"
+
+    # Invoke the CLI command
+    result = runner.invoke(
+        run_smoke_test,
+        [
+            "--idea-id",
+            idea_id_to_test,
+            "--budget",
+            budget_to_test,
+            "--results-dir",
+            str(TEST_OUTPUT_BASE_DIR),
+        ],
+    )
+
+    assert result.exit_code == 0, f"CLI command failed: {result.output}"
+    budget_float = float(budget_to_test)
+    start_msg = (
+        f"Starting smoke test for Idea ID: {idea_id_to_test} "
+        f"with budget: ${budget_float:.1f}"
+    )
+    assert start_msg in result.output
+    # Use resolved path for assertion as Click option resolves it
+    resolved_test_output_dir = str(TEST_OUTPUT_BASE_DIR.resolve())
+    assert f"Results will be stored in: {resolved_test_output_dir}" in result.output
+    step1_msg = f"Step 1: Fetching details for Idea ID: {idea_id_to_test} (Placeholder)"
+    assert step1_msg in result.output
+    assert "Step 2: Preparing landing page configuration (Mocked)" in result.output
+
+    mock_deploy_page.assert_called_once()
+    # Use the mock's actual return value in the assertion
+    assert mock_deploy_page.return_value in result.output
+
+    mock_create_campaign.assert_called_once()
+    assert mock_create_campaign.call_args[0][1] == budget_float
+    # Use the mock's actual return value in the assertion
+    assert mock_create_campaign.return_value in result.output
+
+    assert "Fetching mock campaign metrics..." in result.output
+    # Ensure get_campaign_metrics is called with the ID from create_google_ads_campaign
+    mock_get_metrics.assert_called_once_with(mock_create_campaign.return_value)
+
+    # Slugify idea_id as done in the script for path construction
+    idea_id_slug = "".join(
+        c if c.isalnum() or c in ("-", "_") else "_" for c in idea_id_to_test
+    )
+    expected_analytics_path = TEST_OUTPUT_BASE_DIR / idea_id_slug / "analytics.json"
+
+    assert expected_analytics_path.exists(), (
+        f"Analytics file not found at {expected_analytics_path}"
+    )
+    with open(expected_analytics_path, "r") as f:
+        saved_metrics = json.load(f)
+    assert saved_metrics == mock_metrics_data
+    # Use resolved path for assertion as the script prints the resolved path
+    expected_save_msg = (
+        f"Mock metrics saved to: {str(expected_analytics_path.resolve())}"
+    )
+    assert expected_save_msg in result.output
+
+    step7_msg = "Step 7: Simulating push of metrics to PostHog (Placeholder)"
+    assert step7_msg in result.output
+    assert f"Smoke test for Idea ID: {idea_id_to_test} completed." in result.output
+
+
+def test_run_smoke_test_missing_idea_id():
+    """Tests CLI behavior when a required option is missing."""
+    runner = CliRunner()
+    result = runner.invoke(run_smoke_test, ["--budget", "10.0"])  # Missing --idea-id
+    assert result.exit_code != 0  # Expect error
+    assert "Missing option '--idea-id'" in result.output
+
+
+def test_run_smoke_test_invalid_budget_type():
+    """Tests CLI behavior with invalid type for an option."""
+    runner = CliRunner()
+    result = runner.invoke(
+        run_smoke_test, ["--idea-id", "my-idea", "--budget", "not-a-float"]
+    )
+    assert result.exit_code != 0  # Expect error
+    expected_error_msg = (
+        "Invalid value for '--budget': 'not-a-float' is not a valid float."
+    )
+    assert expected_error_msg in result.output
+
+
+@mock.patch("scripts.run_smoke_test.deploy_landing_page_to_unbounce")
+@mock.patch("scripts.run_smoke_test.create_google_ads_campaign")
+@mock.patch("scripts.run_smoke_test.get_campaign_metrics")
+# Mock json.dump to simulate IO error
+@mock.patch("scripts.run_smoke_test.json.dump")
+@mock.patch("scripts.run_smoke_test.SMOKE_TEST_RESULTS_DIR", str(TEST_OUTPUT_BASE_DIR))
+def test_run_smoke_test_metrics_saving_error(
+    mock_json_dump, mock_get_metrics, mock_create_campaign, mock_deploy_page
+):
+    """Tests if an error during metrics saving is handled."""
+    mock_deploy_page.return_value = "http://mockpages.com/test-io-error"
+    mock_create_campaign.return_value = "mock-campaign-id-io-error"
+    mock_get_metrics.return_value = {"data": "test"}
+    mock_json_dump.side_effect = IOError("Simulated disk full error")
+
+    runner = CliRunner()
+    result = runner.invoke(
+        run_smoke_test,
+        ["--idea-id", "test-io-error", "--results-dir", str(TEST_OUTPUT_BASE_DIR)],
+    )
+
+    assert result.exit_code == 0  # Script should still complete
+    assert "Error saving metrics: Simulated disk full error" in result.output
+    assert "Smoke test for Idea ID: test-io-error completed." in result.output
