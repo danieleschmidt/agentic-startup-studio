@@ -10,7 +10,9 @@ from core.ads_manager import (
     create_google_ads_campaign,
     get_campaign_metrics,
 )
+
 # from core.idea_ledger import get_idea_by_id # Placeholder for future use
+from core.ad_budget_sentinel import AdBudgetSentinel  # Import AdBudgetSentinel
 
 SMOKE_TEST_RESULTS_DIR = "smoke_tests"  # Default results directory
 
@@ -93,12 +95,42 @@ def run_smoke_test(idea_id: str, budget: float, results_dir: str):
     campaign_id = create_google_ads_campaign(campaign_config, budget)
     click.echo(f"Mock ad campaign created with ID: {campaign_id}")
 
+    # Instantiate AdBudgetSentinel
+    ad_sentinel = AdBudgetSentinel(
+        max_budget=budget,
+        campaign_id=campaign_id,
+        halt_callback=lambda camp_id, reason: click.echo(
+            f"HALT_CALLBACK: Campaign {camp_id} ordered to halt. Reason: {reason}",
+            err=True,
+        ),
+        alert_callback=lambda msg: click.echo(f"ALERT_CALLBACK: {msg}", err=True),
+    )
+    click.echo(
+        f"AdBudgetSentinel initialized for campaign {campaign_id} "
+        f"with max budget ${budget:.2f}"
+    )
+
     # 5. Simulate campaign run and fetch mock metrics
     click.echo("Step 5: Simulating campaign run (waiting 3 seconds)...")
     time.sleep(3)  # Simulate time delay
     click.echo("Fetching mock campaign metrics...")
     metrics = get_campaign_metrics(campaign_id)
     click.echo(f"Retrieved metrics: {metrics}")
+
+    # Check ad spend
+    current_spend = metrics.get("total_cost", 0.0)
+    click.echo(
+        f"Checking ad spend: ${current_spend:.2f} against budget "
+        f"using AdBudgetSentinel."
+    )
+    if not ad_sentinel.check_spend(current_spend):
+        click.echo(
+            f"Ad budget exceeded for campaign {campaign_id}. "
+            f"Further actions would be halted.",
+            err=True,
+        )
+    else:
+        click.echo(f"Ad spend for campaign {campaign_id} is within budget.")
 
     # 6. Store mock metrics
     click.echo("Step 6: Storing mock metrics...")
