@@ -192,3 +192,17 @@ cython_debug/
 #  refer to https://docs.cursor.com/context/ignore-files
 .cursorignore
 .cursorindexingignore
+
+# Node.js
+node_modules/
+package-lock.json
+yarn.lock
+
+# macOS
+.DS_Store
+
+# Docker
+docker-compose.override.yml
+
+# Generic log files
+*.log
