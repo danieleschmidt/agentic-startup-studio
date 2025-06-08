@@ -17,7 +17,8 @@ from core.evidence_collector import EvidenceCollector
 from core.deck_generator import generate_deck_content
 from core.investor_scorer import load_investor_profile, score_pitch_with_rubric
 from core.token_budget_sentinel import TokenBudgetSentinel
-from core.evidence_summarizer import summarize_evidence  # Import new summarizer
+from core.evidence_summarizer import summarize_evidence
+from core.bias_monitor import check_text_for_bias  # Import bias monitor
 
 
 # --- Configuration ---
@@ -54,6 +55,9 @@ class GraphState(TypedDict):
     token_budget_alerts: List[str]  # New field
     token_budget_exceeded: bool  # New field
     evidence_summary: Optional[str]  # New field for summary
+    ideation_bias_check_result: Optional[Dict[str, Any]]
+    deck_bias_check_result: Optional[Dict[str, Any]]
+    halted_due_to_bias: bool  # New field
 
 
 # --- Define Nodes ---
@@ -82,24 +86,35 @@ def ideate_node(state: GraphState) -> Dict[str, Any]:
     )
 
     # Node logic (mocked)
-    updated_values = {
-        "idea_name": "AI-Powered Personalized Meal Planner",
-        "idea_description": (
-            "A platform that uses AI to create custom meal plans based on dietary "
-            "restrictions, preferences, available ingredients, and health goals. "
-            "It also generates shopping lists and provides cooking instructions."
-        ),
-        "current_phase": "Ideate",
-        "evidence_items": [],
-        "investor_feedback": [],
-    }
-    print(f"  Generated Idea: {updated_values['idea_name']}")
-    print(f"  Description: {updated_values['idea_description'][:50]}...")
+    idea_name = "AI-Powered Personalized Meal Planner"
+    idea_description = (
+        "An innovative application that uses AI to create personalized meal plans, "
+        "generate shopping lists, and guide users through cooking processes with "
+        "interactive tutorials. It aims to make healthy eating easy and accessible "
+        "for everyone, especially those with busy schedules or specific dietary needs. "
+        "The system learns user preferences over time."
+    )
+    print(f"  Generated Idea: {idea_name}")
+    print(f"  Description: {idea_description[:50]}...")
+
+    # Perform bias check on the idea description
+    bias_result = check_text_for_bias(idea_description)
+    critical_status = bias_result.get("is_critical", "Error")
+    bias_score = bias_result.get("bias_score", -1)
+    click.echo(
+        f"  Ideation bias check result: Critical={critical_status}, "
+        f"Score={bias_score:.2f}"
+    )
 
     return {
-        **updated_values,
+        "idea_name": idea_name,
+        "idea_description": idea_description,
+        "current_phase": "IdeateComplete",  # Updated phase
+        "evidence_items": [],
+        "investor_feedback": [],
         "total_tokens_consumed": new_total_tokens,
         "token_budget_exceeded": final_budget_exceeded_status,
+        "ideation_bias_check_result": bias_result,  # Store the full result
     }
 
 
@@ -224,12 +239,22 @@ def deck_generation_node(state: GraphState) -> Dict[str, Any]:
         budget_already_exceeded or not is_within_budget_for_step
     )
 
+    # 3. Perform bias check on the generated deck content
+    deck_bias_result = check_text_for_bias(generated_deck_md)
+    critical_status_deck = deck_bias_result.get("is_critical", "Error")
+    bias_score_deck = deck_bias_result.get("bias_score", -1)
+    click.echo(
+        f"  Deck content bias check result: Critical={critical_status_deck}, "
+        f"Score={bias_score_deck:.2f}"
+    )
+
     return {
         "deck_content": generated_deck_md,
-        "evidence_summary": summary,  # Store the summary in state
-        "current_phase": "DeckGeneration",
+        "evidence_summary": summary,
+        "current_phase": "DeckGenerationComplete",  # Updated phase
         "total_tokens_consumed": new_total_tokens,
         "token_budget_exceeded": final_budget_exceeded_status,
+        "deck_bias_check_result": deck_bias_result,  # Store the full result
     }
 
 
@@ -345,7 +370,8 @@ workflow.set_entry_point("ideate")
 
 workflow.add_edge("ideate", "research")
 workflow.add_edge("research", "deck_generation")
-workflow.add_edge("deck_generation", "investor_review")
+# REMOVED: workflow.add_edge("deck_generation", "investor_review")
+# This path is now handled by the conditional edge `decide_bias_routing` below.
 
 workflow.add_conditional_edges(
     "investor_review",
@@ -358,94 +384,217 @@ workflow.add_conditional_edges(
 workflow.add_edge("funded_final_node", END)
 workflow.add_edge("rejected_final_node", END)
 
+
+# New node for bias revision/halt
+def revise_due_to_bias_node(state: GraphState) -> Dict[str, Any]:
+    click.echo("--- Running Revise Due To Bias Node ---")
+    alerts = []
+    if state.get("ideation_bias_check_result", {}).get("is_critical"):
+        alerts.append("Critical bias detected in initial idea description.")
+    if state.get("deck_bias_check_result", {}).get("is_critical"):
+        alerts.append("Critical bias detected in generated deck content.")
+
+    alert_summary = " ".join(alerts)
+    click.echo(f"HALT: Content revision required. Reason(s): {alert_summary}", err=True)
+
+    current_total_tokens = state.get("total_tokens_consumed", 0)
+    REVISE_NODE_COST = 50
+    new_total_tokens = current_total_tokens + REVISE_NODE_COST
+    token_sentinel.check_usage(new_total_tokens, "Revise/Halt Node")
+
+    return {
+        "final_status": f"Halted: Critical Bias Detected ({alert_summary})",
+        "halted_due_to_bias": True,
+        "total_tokens_consumed": new_total_tokens,
+        "token_budget_exceeded": new_total_tokens > token_sentinel.max_tokens,
+        "current_phase": "BiasHalt",
+    }
+
+
+# New conditional edge function for bias routing
+def decide_bias_routing(state: GraphState) -> str:
+    click.echo("--- Decision: Checking for Critical Bias ---")
+    ideation_check = state.get("ideation_bias_check_result", {})
+    deck_check = state.get("deck_bias_check_result", {})
+    ideation_critical = ideation_check.get("is_critical", False)
+    deck_critical = deck_check.get("is_critical", False)
+
+    if ideation_critical or deck_critical:
+        click.echo("  Critical bias detected. Routing to revision/halt.")
+        return "revise_due_to_bias"
+    else:
+        click.echo("  No critical bias detected. Proceeding to investor review.")
+        return "proceed_to_investor_review"
+
+
+# Update graph definition
+workflow.add_node("revise_due_to_bias", revise_due_to_bias_node)
+
+# Remove old direct edge from deck_generation to investor_review
+# This is done by simply not adding it and adding the conditional one instead.
+# If an explicit edge existed and needed removal, LangGraph's API might differ.
+# Here, we are redefining the outgoing paths from deck_generation.
+
+# The old edge was: workflow.add_edge("deck_generation", "investor_review")
+# This is now replaced by the conditional edge below.
+
+workflow.add_conditional_edges(
+    "deck_generation",
+    decide_bias_routing,
+    {
+        "revise_due_to_bias": "revise_due_to_bias",
+        "proceed_to_investor_review": "investor_review",
+    },
+)
+workflow.add_edge("revise_due_to_bias", END)
+
 app = workflow.compile()
 
 # --- Basic Test Invocation ---
 if __name__ == "__main__":
-    print("Compiling and running the LangGraph Pitch Loop...")
+    from unittest.mock import patch  # For mocking bias check
 
-    # Define an initial state (can be empty or partially filled if needed by entry node)
-    initial_state: GraphState = {
+    # Template for initial state
+    initial_state_template: GraphState = {
         "idea_name": None,
         "idea_description": None,
         "current_claim": None,
         "evidence_items": [],
         "deck_content": None,
-        "investor_feedback": [],
+        "investor_feedback": None,
         "funding_score": None,
         "current_phase": "Initial",
         "final_status": None,
-        "total_tokens_consumed": 0,  # Initialize token usage
-        "token_budget_alerts": [],  # Initialize alerts list
-        "token_budget_exceeded": False,  # Initialize budget exceeded flag
+        "total_tokens_consumed": 0,
+        "token_budget_alerts": [],
+        "token_budget_exceeded": False,
+        "evidence_summary": None,
+        "ideation_bias_check_result": None,
+        "deck_bias_check_result": None,
+        "halted_due_to_bias": False,
     }
 
-    # Clear any alerts from previous runs if sentinel is global
-    token_sentinel.clear_alerts()
+    def run_pitch_simulation(test_name: str, mock_bias_side_effect=None):
+        click.echo(f"\n--- Running Pitch Loop Simulation: {test_name} ---")
+        token_sentinel.clear_alerts()
+        current_initial_state = initial_state_template.copy()
 
-    print(
-        f"\n--- Invoking graph with default mock scoring "
-        f"(FUND_THRESHOLD: {FUND_THRESHOLD}) ---"
-    )
-    # The mock score in investor_review_node is random(0.5, 1.0).
-    # Default FUND_THRESHOLD is 0.8. So, this might go to funded or rejected.
-    final_state_run1 = app.invoke(initial_state)
-
-    # Fetch all alerts that might have been internally stored by the sentinel
-    final_state_run1["token_budget_alerts"] = token_sentinel.get_alerts()
-
-    print("\n--- Final State (Run 1) ---")
-    for key, value in final_state_run1.items():
-        if key == "evidence_items" and isinstance(value, list) and value:
-            print(f"{key}: [Array of {len(value)} evidence item(s), details omitted]")
-        elif isinstance(value, str) and len(value) > 100:  # Truncate long strings
-            print(f"{key}: {value[:100]}...")
+        final_state = None
+        if mock_bias_side_effect:
+            # Patch 'check_text_for_bias' within the current module's namespace,
+            # as this is where the nodes in this file will look it up.
+            with patch(
+                "configs.langgraph.pitch_loop.check_text_for_bias"
+            ) as mock_check_bias:
+                mock_check_bias.side_effect = mock_bias_side_effect
+                side_effect_str = str(mock_bias_side_effect)
+                click.echo(
+                    "Mocking bias check with specific side effects for this run. "
+                    f"Calls will use: {side_effect_str[:50]}..."  # Truncate
+                )
+                final_state = app.invoke(current_initial_state)
         else:
-            print(f"{key}: {value}")
-    print(f"Final decision from state: {final_state_run1.get('final_status')}")
+            click.echo("Running with actual (mocked random) bias check.")
+            final_state = app.invoke(current_initial_state)
 
-    click.echo("\n--- Token Budget Sentinel Report (Run 1) ---")
-    click.echo(f"Max Pitch Loop Tokens: {MAX_PITCH_LOOP_TOKENS}")
-    tokens_consumed = final_state_run1.get("total_tokens_consumed")
-    click.echo(f"Total Tokens Consumed: {tokens_consumed}")
-    budget_exceeded_state = final_state_run1.get("token_budget_exceeded")
-    click.echo(f"Budget Exceeded Flag in State: {budget_exceeded_state}")
+        if final_state is None:  # Should not happen if app.invoke was called
+            click.echo("Error: Final state not obtained.", err=True)
+            return
 
-    # Sentinel's direct check based on its max_tokens
-    if tokens_consumed is not None and tokens_consumed > MAX_PITCH_LOOP_TOKENS:
-        click.echo(
-            f"Final Tally: Total consumed ({tokens_consumed}) > budget "
-            f"({MAX_PITCH_LOOP_TOKENS}). Budget definitely exceeded."
-        )
+        final_state["token_budget_alerts"] = token_sentinel.get_alerts()
 
-    if final_state_run1.get("token_budget_alerts"):
-        click.echo("Alerts Recorded by Sentinel:")
-        for alert_idx, alert_msg in enumerate(final_state_run1["token_budget_alerts"]):
-            click.echo(f"- Alert {alert_idx + 1}: {alert_msg}")
-    else:
-        click.echo("No token budget alerts recorded by sentinel.")
+        click.echo("\n--- Final State ---")
+        for key, value in final_state.items():
+            if (
+                key in ["ideation_bias_check_result", "deck_bias_check_result"]
+                and value
+            ):
+                click.echo(f"  {key}:")
+                details = value.get("details", "N/A")
+                click.echo(
+                    f"    Score: {value.get('bias_score', 'N/A'):.4f}, "
+                    f"Critical: {value.get('is_critical', 'N/A')}"
+                )
+                click.echo(f"    Details (truncated): {details[:100]}...")
+            elif key == "evidence_items" and value:
+                click.echo(f"  {key}: (Summary of {len(value)} top-level items)")
+                for idx, item_group in enumerate(value):  # evidence_items is List[Dict]
+                    if isinstance(item_group, dict):
+                        claim = item_group.get("claim", "N/A")
+                        status = item_group.get("status", "N/A")
+                        num_src = len(item_group.get("all_sources", []))
+                        click.echo(
+                            f"    Item {idx + 1}: Claim: '{claim[:30]}...', "
+                            f"Status: {status}, Sources: {num_src}"
+                        )
+                    else:
+                        item_str = str(item_group)[:50]
+                        click.echo(
+                            f"    Item {idx + 1}: Unexpected format - {item_str}..."
+                        )
+            elif key == "deck_content" and isinstance(value, str):
+                click.echo(f"  {key} (Deck Content Truncated): {value[:150]}...")
+            else:
+                click.echo(f"  {key}: {value}")
 
-    # To test a specific path (e.g., rejected), manipulate FUND_THRESHOLD for this run
-    # (env var is preferred for external config).
-    # This part is for demo if running script directly to see branches.
-    # For unit tests, mock decide_funding_status or funding_score.
-    print(
-        "\n--- Example: How to test different paths by changing "
-        "FUND_THRESHOLD externally ---"
+        click.echo("\n--- Token Budget Sentinel Report ---")
+        click.echo(f"Max Pitch Loop Tokens: {MAX_PITCH_LOOP_TOKENS}")
+        tokens_consumed = final_state.get("total_tokens_consumed")
+        click.echo(f"Total Tokens Consumed: {tokens_consumed}")
+        budget_exceeded_state = final_state.get("token_budget_exceeded")
+        click.echo(f"Budget Exceeded Flag in State: {budget_exceeded_state}")
+        if tokens_consumed is not None and tokens_consumed > MAX_PITCH_LOOP_TOKENS:
+            click.echo(
+                f"Final Tally: Total consumed ({tokens_consumed}) > budget "
+                f"({MAX_PITCH_LOOP_TOKENS}). Budget definitely exceeded."
+            )
+        if final_state.get("token_budget_alerts"):
+            click.echo("Alerts Recorded by Sentinel:")
+            for alert_idx, alert_msg in enumerate(final_state["token_budget_alerts"]):
+                click.echo(f"- Alert {alert_idx + 1}: {alert_msg}")
+        else:
+            click.echo("No token budget alerts recorded by sentinel.")
+        click.echo(f"--- End of Simulation: {test_name} ---")
+
+    print("Compiling and running the LangGraph Pitch Loop...")
+    # Test Case 1: No critical bias (relies on random or default mock behavior)
+    run_pitch_simulation("Test Case 1: No Critical Bias (Random)")
+
+    # Test Case 2: Critical bias in ideation
+    ideation_critical_res = {
+        "bias_score": 0.9,
+        "is_critical": True,
+        "details": "Mock critical bias in ideation.",
+    }
+    deck_ok_res = {"bias_score": 0.1, "is_critical": False, "details": "Mock deck OK."}
+    run_pitch_simulation(
+        "Test Case 2: Critical Bias in Ideation",
+        mock_bias_side_effect=[ideation_critical_res, deck_ok_res],
     )
-    print(f"  To force 'rejected' more often: $ FUND_THRESHOLD=0.95 python {__file__}")
-    print(f"  To force 'funded' more often:   $ FUND_THRESHOLD=0.5 python {__file__}")
 
-    # A second run example would require more direct mocking of the score
-    # for true path testing within this __main__ block.
-    # The random score in investor_review_node might lead to different outcomes
-    # on different runs if FUND_THRESHOLD is near the random score's mean.
+    # Test Case 3: Critical bias in deck generation
+    ideation_ok_res = {
+        "bias_score": 0.2,
+        "is_critical": False,
+        "details": "Mock ideation OK.",
+    }
+    deck_critical_res = {
+        "bias_score": 0.95,
+        "is_critical": True,
+        "details": "Mock critical bias in deck.",
+    }
+    run_pitch_simulation(
+        "Test Case 3: Critical Bias in Deck Generation",
+        mock_bias_side_effect=[ideation_ok_res, deck_critical_res],
+    )
 
-    # To visualize (requires graphviz and matplotlib or other viewers)
-    # try:
-    #     print("\nGenerating graph diagram (pitch_loop.png)...")
-    #     app.get_graph().draw_mermaid_png(output_file_path="pitch_loop.png")
-    #     print("Diagram saved to pitch_loop.png (if graphviz/matplotlib installed).")
-    # except Exception as e:
-    #     print(f"Could not generate diagram: {e}")
-    #     print("Ensure graphviz (dot) and matplotlib/pygraphviz are installed.")
+    # Test Case 4: Both critical (ideation should halt it first)
+    # deck_critical_res might not be called if ideation halts the flow
+    run_pitch_simulation(
+        "Test Case 4: Both Ideation and Deck Critical",
+        mock_bias_side_effect=[ideation_critical_res, deck_critical_res],
+    )
+
+    click.echo("\nReminder: If not using specific mock side_effects for bias checks,")
+    click.echo("you might need to run multiple times to observe different paths")
+    click.echo("due to the random nature of the default 'check_text_for_bias' mock.")
