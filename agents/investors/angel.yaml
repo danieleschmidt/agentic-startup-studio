@@ -1,0 +1,11 @@
+name: Angel
+llm: google:gemini-pro
+persona: >
+  Operator-angel seeking strong founder–market fit and capital-efficient
+  go-to-market.
+scoring_rubric:
+  founder_fit: 0.5
+  speed_to_mvp: 0.3
+  virality: 0.2
+threshold: 0.75
+tools: [twitter_scrape, deckmatch_api]
