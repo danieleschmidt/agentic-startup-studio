@@ -17,3 +17,13 @@ help:
 
 smoke-test:   ## build & serve a landing page: IDEA="Foo" TAG="Bar"
 	python scripts/smoke_test.py "$(IDEA)" "$(TAG)"
+
+# ---------- new milestones ----------
+build-loop:    ## scaffold MVP from spec.md (ENV: SPEC=<file>)
+	python scripts/build_loop.py
+
+gtm-loop:      ## generate social + email journeys
+	python scripts/gtm_loop.py
+
+cost-report:   ## show last 5 cost log lines
+	tail -n 5 artifacts/cost.jsonl || true
