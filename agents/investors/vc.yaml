@@ -1,0 +1,40 @@
+# agents/investors/vc.yaml
+persona:
+  role: "Venture Capitalist"
+  focus_areas: ["Enterprise SaaS", "AI/ML Platforms", "Fintech", "Deep Tech"]
+  investment_stage: ["Seed", "Series A", "Series B"]
+  typical_check_size: "$500K - $5M"
+  thesis: "Investing in disruptive technologies with strong founding teams and large addressable markets."
+
+scoring_rubric:
+  team:
+    weight: 0.25 # Increased weight for team
+    criteria:
+      - "Founder experience, domain expertise, and demonstrated ability to execute."
+      - "Completeness of the core team (e.g., technical, business, sales)."
+      - "Coachability and vision of the leadership."
+  market:
+    weight: 0.25 # Slightly decreased from a pure TAM focus
+    criteria:
+      - "Clear definition and size of Target Addressable Market (TAM) and Serviceable Obtainable Market (SOM)."
+      - "Strong evidence of market growth, demand, and customer pain points."
+      - "Favorable competitive landscape and sustainable differentiation."
+  product_solution:
+    weight: 0.30
+    criteria:
+      - "Clear value proposition and problem/solution fit demonstrated."
+      - "Significant innovation or unique selling proposition (USP)."
+      - "Technical feasibility and scalability of the proposed solution."
+      - "Path to product-market fit and potential for user adoption."
+  business_model:
+    weight: 0.10
+    criteria:
+      - "Clear, viable, and scalable monetization strategy."
+      - "Plausible customer acquisition strategy and unit economics."
+      - "Defensible business model with potential for high gross margins."
+  pitch_quality:
+    weight: 0.10
+    criteria:
+      - "Clarity, conciseness, and completeness of the pitch deck."
+      - "Compelling narrative, clear articulation of vision and strategy."
+      - "Professionalism and preparedness in presentation."

@@ -1,0 +1,36 @@
+---
+marp: true
+theme: default # You can choose other Marp themes like gaia, uncover
+size: 16:9
+paginate: true
+---
+
+<!-- _class: lead -->
+# {title}
+## {subtitle}
+
+---
+
+## {section1_title}
+
+{section1_content}
+
+---
+
+## {section2_title}
+
+{section2_content}
+
+---
+
+## {section3_title}
+
+{section3_content}
+
+---
+
+<!-- _class: invert -->
+## Thank You
+
+Questions?
+Contact: {contact_email}
