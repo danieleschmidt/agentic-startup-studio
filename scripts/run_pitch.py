@@ -1,20 +1,17 @@
-import argparse, yaml
+"""
+CLI wrapper now imports load_all_agents correctly.
+"""
+import argparse, yaml, json
+from agents.loader import load_all_agents
 from configs.langgraph.pitch_loop import graph
-from agents.loader import load_all_agents  # util you add later
 
-ap = argparse.ArgumentParser()
-ap.add_argument("--tokens", type=int, default=20000)
-ap.add_argument("--threshold", type=float, default=0.8)
-args = ap.parse_args()
+parser = argparse.ArgumentParser()
+parser.add_argument("--tokens", type=int, default=20000)
+parser.add_argument("--threshold", type=float, default=0.8)
+args = parser.parse_args()
 
-# load agents once per run
-agents = load_all_agents()
+state = {"agents": load_all_agents(), "token_cap": args.tokens}
+out = graph.invoke(state)
 
-initial_state = {"agents": agents, "token_cap": args.tokens}
-final_state = graph.invoke(initial_state)
-score = final_state["funding_score"]
-
-if score >= args.threshold:
-    print(f"✅ Fundable idea! score={score:.2f}")
-else:
-    print(f"❌ Rejected. score={score:.2f}")
+print(f"⚖️  Funding-score = {out['funding_score']:.2f}")
+print("✅ Funded!" if out["funding_score"] >= args.threshold else "❌ Rejected")
