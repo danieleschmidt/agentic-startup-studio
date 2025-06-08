@@ -1,18 +1,27 @@
-"""
-Thin wrapper around GPT-Engineer’s `gpt-engineer generate`.
-Repo: :contentReference[oaicite:2]{index=2}
-"""
-import subprocess, tempfile, shutil, pathlib, os, uuid
+import subprocess, tempfile, shutil, pathlib, json, os, uuid, time
+from tools.cost_tracker import counter, TOKENS_SPENT
 
-def run(spec_text):
-    workdir = pathlib.Path(tempfile.mkdtemp(prefix="gpteng_"))
-    (workdir/"spec.md").write_text(spec_text)
-    cmd = ["gpt-engineer", "generate", str(workdir/"spec.md")]
-    cp = subprocess.run(cmd, capture_output=True, text=True)
+def run(spec_file: str, idea_id: str):
+    work = pathlib.Path(tempfile.mkdtemp(prefix="gpteng_"))
+    shutil.copy(spec_file, work/"prompt.md")
+
+    tic = time.time()
+    cp = subprocess.run(["gpt-engineer", "generate", "prompt.md"], cwd=work, text=True)
+    toc = time.time()
+
     if cp.returncode:
-        return f"❌ GPT-Engineer failed\n{cp.stderr}"
-    repo_path = workdir / "generated"
-    # push stub – replace with real Git commands
-    dest = pathlib.Path(f"mvp/{uuid.uuid4()}")
-    shutil.move(repo_path, dest)
-    return f"✅ Repo scaffolded at {dest}"
+        raise RuntimeError(cp.stderr)
+
+    # count tokens (via gpt-engineer log JSON)
+    usage_path = work/"generated"/"gpt-engineer-token-usage.json"
+    if usage_path.exists():
+        TOKENS_SPENT.inc(json.loads(usage_path.read_text())["total_tokens"])
+
+    repo = pathlib.Path(f"mvp/{idea_id}")
+    repo.mkdir(parents=True, exist_ok=True)
+    shutil.move(str(work/"generated"), repo)
+
+    with counter("gpt_engineer_seconds_total"):
+        pass  # duration emitted
+
+    return f"✅ MVP ready in {repo}  ({toc-tic:.1f}s)"
