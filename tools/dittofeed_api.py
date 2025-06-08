@@ -1,10 +1,14 @@
-"""
-Dittofeed journey creator.  Dittofeed channels & docs: :contentReference[oaicite:4]{index=4}
-"""
-import uuid, json, pathlib
-def run(journey_name, steps):
-    jid = str(uuid.uuid4())
-    fp = pathlib.Path(f"journeys/{jid}.json")
-    fp.parent.mkdir(exist_ok=True)
-    fp.write_text(json.dumps({"name": journey_name, "steps": steps}, indent=2))
-    return f"Journey saved → {fp}"
+import requests, os, json
+
+BASE = os.getenv("DITTOFEED_URL", "http://localhost:9000")
+TOK  = os.getenv("DITTOFEED_TOKEN")
+
+def run(journey_name, steps, audience="all-users"):
+    payload = {
+        "name": journey_name,
+        "audience": audience,
+        "steps": steps
+    }
+    r = requests.post(f"{BASE}/api/v1/journeys", headers={"Authorization": f"Bearer {TOK}"}, json=payload)
+    r.raise_for_status()
+    return r.json()["id"]   # Dittofeed journey docs :contentReference[oaicite:2]{index=2}
