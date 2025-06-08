@@ -1,0 +1,21 @@
+# See https://pre-commit.com for more information
+# See https://pre-commit.com/hooks.html for more hooks
+repos:
+-   repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0 # Use the latest version
+    hooks:
+    -   id: trailing-whitespace
+    -   id: end-of-file-fixer
+    -   id: check-yaml
+    -   id: check-toml
+    -   id: check-added-large-files
+
+-   repo: https://github.com/astral-sh/ruff-pre-commit
+    # Ruff version. Must be kept in sync with GitHub Actions CI.
+    # Find the latest ruff version at https://github.com/astral-sh/ruff/releases
+    rev: v0.4.4 # Replace with a specific Ruff version
+    hooks:
+    -   id: ruff
+        args: [--fix, --exit-non-zero-on-fix] # Apply fixes and exit with error if fixes were made
+    -   id: ruff-format # If you want to use ruff for formatting as well
+        # args: [] # Add any specific formatting args if needed
