@@ -1,0 +1,42 @@
+version: "3.9"
+
+services:
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    ports: ["6379:6379"]
+
+  pgvector:
+    image: pgvector/pgvector:pg14
+    environment:
+      - POSTGRES_DB=studio
+      - POSTGRES_USER=studio
+      - POSTGRES_PASSWORD=studio
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports: ["5432:5432"]
+
+  posthog:
+    image: posthog/posthog:latest
+    depends_on: [pgvector, redis]
+    environment:
+      - DATABASE_URL=postgres://studio:studio@pgvector:5432/studio
+      - SECRET_KEY=changeme
+      - CLICKHOUSE_HOST=posthog-clickhouse
+    ports: ["8000:8000"]
+
+  posthog-clickhouse:
+    image: clickhouse/clickhouse-server:23
+    volumes:
+      - chdata:/var/lib/clickhouse
+
+  dittofeed:
+    image: ghcr.io/dittofeed/dittofeed:latest
+    depends_on: [pgvector]
+    environment:
+      - DATABASE_URL=postgres://studio:studio@pgvector:5432/studio
+    ports: ["9000:8080"]
+
+volumes:
+  pgdata:
+  chdata:
