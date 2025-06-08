@@ -13,6 +13,7 @@ import os  # For environment variables
 import click  # For console alert handler
 
 # Assuming core modules are accessible via PYTHONPATH
+from core.alert_manager import AlertManager  # Moved import to top
 from core.evidence_collector import EvidenceCollector
 from core.deck_generator import generate_deck_content
 from core.investor_scorer import load_investor_profile, score_pitch_with_rubric
@@ -26,14 +27,16 @@ FUND_THRESHOLD = float(os.getenv("FUND_THRESHOLD", "0.8"))
 MAX_PITCH_LOOP_TOKENS = 1000  # Define max tokens for the entire loop
 
 
-# Simple alert handler for demonstration
-def _console_alert_handler(message: str):
-    click.echo(f"TOKEN_BUDGET_ALERT: {message}", err=True)
+# Instantiate AlertManager globally
+alert_manager = AlertManager(log_file_path="logs/pitch_loop_alerts.log")
 
-
+# Modify TokenBudgetSentinel to use AlertManager
 token_sentinel = TokenBudgetSentinel(
-    max_tokens=MAX_PITCH_LOOP_TOKENS, alert_callback=_console_alert_handler
+    max_tokens=MAX_PITCH_LOOP_TOKENS,
+    alert_manager=alert_manager,
+    # alert_callback=_console_alert_handler # Removed
 )
+# _console_alert_handler is now removed.
 
 
 # --- Define State Schema ---
@@ -52,7 +55,7 @@ class GraphState(TypedDict):
     current_phase: str  # To track which phase (Ideate, Research, etc.)
     final_status: Optional[str]  # New field for funded/rejected status
     total_tokens_consumed: int  # New field
-    token_budget_alerts: List[str]  # New field
+    # token_budget_alerts: List[str]  # Removed, AlertManager is the central store
     token_budget_exceeded: bool  # New field
     evidence_summary: Optional[str]  # New field for summary
     ideation_bias_check_result: Optional[Dict[str, Any]]
@@ -466,7 +469,7 @@ if __name__ == "__main__":
         "current_phase": "Initial",
         "final_status": None,
         "total_tokens_consumed": 0,
-        "token_budget_alerts": [],
+        # "token_budget_alerts": [], # Removed
         "token_budget_exceeded": False,
         "evidence_summary": None,
         "ideation_bias_check_result": None,
@@ -476,7 +479,7 @@ if __name__ == "__main__":
 
     def run_pitch_simulation(test_name: str, mock_bias_side_effect=None):
         click.echo(f"\n--- Running Pitch Loop Simulation: {test_name} ---")
-        token_sentinel.clear_alerts()
+        # Alerts are managed globally by alert_manager, cleared after all simulations
         current_initial_state = initial_state_template.copy()
 
         final_state = None
@@ -501,10 +504,12 @@ if __name__ == "__main__":
             click.echo("Error: Final state not obtained.", err=True)
             return
 
-        final_state["token_budget_alerts"] = token_sentinel.get_alerts()
+        # final_state["token_budget_alerts"] = token_sentinel.get_alerts() # Removed
 
         click.echo("\n--- Final State ---")
         for key, value in final_state.items():
+            if key == "token_budget_alerts":  # Skip printing if it somehow still exists
+                continue
             if (
                 key in ["ideation_bias_check_result", "deck_bias_check_result"]
                 and value
@@ -548,15 +553,12 @@ if __name__ == "__main__":
                 f"Final Tally: Total consumed ({tokens_consumed}) > budget "
                 f"({MAX_PITCH_LOOP_TOKENS}). Budget definitely exceeded."
             )
-        if final_state.get("token_budget_alerts"):
-            click.echo("Alerts Recorded by Sentinel:")
-            for alert_idx, alert_msg in enumerate(final_state["token_budget_alerts"]):
-                click.echo(f"- Alert {alert_idx + 1}: {alert_msg}")
-        else:
-            click.echo("No token budget alerts recorded by sentinel.")
+        # Alerts will be printed from the global alert_manager later
         click.echo(f"--- End of Simulation: {test_name} ---")
 
     print("Compiling and running the LangGraph Pitch Loop...")
+    alert_manager.clear_logged_alerts()  # Clear any previous run alerts
+
     # Test Case 1: No critical bias (relies on random or default mock behavior)
     run_pitch_simulation("Test Case 1: No Critical Bias (Random)")
 
@@ -594,6 +596,36 @@ if __name__ == "__main__":
         "Test Case 4: Both Ideation and Deck Critical",
         mock_bias_side_effect=[ideation_critical_res, deck_critical_res],
     )
+
+    # --- AdBudgetSentinel Demonstration ---
+    click.echo("\n--- Demonstrating AdBudgetSentinel with Global AlertManager ---")
+    from core.ad_budget_sentinel import AdBudgetSentinel  # Import here
+
+    demo_ad_sentinel = AdBudgetSentinel(
+        max_budget=100,
+        campaign_id="demo_campaign_pitch_loop",
+        alert_manager=alert_manager,  # Use the global alert_manager
+    )
+    # Simulate spend exceeding budget to trigger an alert
+    demo_ad_sentinel.check_spend(current_spend=150, current_ctr=0.05)
+    # Simulate spend within budget (should not trigger a new CRITICAL alert for budget)
+    demo_ad_sentinel.check_spend(current_spend=50, current_ctr=0.03)
+    click.echo("AdBudgetSentinel demonstration finished.")
+
+    # --- Print All Accumulated Alerts ---
+    click.echo("\n--- All Accumulated Alerts from Global Alert Manager ---")
+    logged_alerts = alert_manager.get_logged_alerts()
+    if logged_alerts:
+        for alert_idx, alert_msg_dict in enumerate(logged_alerts):
+            # Assuming alert_msg_dict is the dictionary form from AlertManager
+            click.echo(
+                f"- Alert {alert_idx + 1}: Level: {alert_msg_dict['level']}, "
+                f"Source: {alert_msg_dict['source']}, "
+                f"Message: {alert_msg_dict['message']}"
+            )
+    else:
+        click.echo("No alerts recorded by the global alert manager.")
+    alert_manager.clear_logged_alerts()  # Clean up after printing
 
     click.echo("\nReminder: If not using specific mock side_effects for bias checks,")
     click.echo("you might need to run multiple times to observe different paths")

@@ -84,13 +84,15 @@ def score_pitch_with_rubric(
                 mock_category_score = random.uniform(0.0, 0.4)
             feedback_items.append(
                 f"Pitch Quality (Deck length: {len(deck_content)} chars): "
-                f"Assigned score {mock_category_score:.2f} (weight {weight * 100:.0f}%)."
+                f"Assigned score {mock_category_score:.2f} "  # Shortened
+                f"(weight {weight * 100:.0f}%)."
             )
         else:
             # For other categories, use the generic mock score
             feedback_items.append(
                 f"{category.replace('_', ' ').capitalize()}: "
-                f"Assigned score {mock_category_score:.2f} (weight {weight * 100:.0f}%). "
+                f"Assigned score {mock_category_score:.2f} "  # Shortened
+                f"(weight {weight * 100:.0f}%). "
                 f"Criteria considered: {len(criteria)}."
             )
 
