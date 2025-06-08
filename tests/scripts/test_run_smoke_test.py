@@ -50,9 +50,9 @@ def test_run_smoke_test_successful_flow(
     mock_metrics_data = {
         "clicks": 150,
         "conversions": 15,
-        "ctr": 0.15,
+        "ctr": 0.15,  # This CTR (15%) is above TARGET_CTR_FOR_BUDGET_INCREASE (0.05)
         "campaign_id": mock_campaign_id_val,
-        "total_cost": 40.0,  # Budget for test is 75.0, so this is within budget
+        "total_cost": 40.0,
     }
     mock_get_metrics.return_value = mock_metrics_data
 
@@ -137,6 +137,55 @@ def test_run_smoke_test_successful_flow(
         f"Ad spend for campaign {mock_campaign_id_val} is within budget."
     )
     assert within_budget_msg in result.output
+    success_ctr_msg = "SUCCESS: Actual CTR (0.1500) met or exceeded target (0.0500)."
+    assert success_ctr_msg in result.output
+    suggested_budget_val = float(budget_to_test) * 1.5
+    assert f"Suggested next budget: ${suggested_budget_val:.2f}" in result.output
+
+
+@mock.patch("scripts.run_smoke_test.deploy_landing_page_to_unbounce")
+@mock.patch("scripts.run_smoke_test.create_google_ads_campaign")
+@mock.patch("scripts.run_smoke_test.get_campaign_metrics")
+@mock.patch("scripts.run_smoke_test.AdBudgetSentinel")
+@mock.patch("scripts.run_smoke_test.SMOKE_TEST_RESULTS_DIR", str(TEST_OUTPUT_BASE_DIR))
+def test_run_smoke_test_ctr_below_target(
+    mock_ad_sentinel_class,  # Innermost from this group due to decorator order
+    mock_get_metrics,
+    mock_create_campaign,
+    mock_deploy_page,
+):
+    """Tests the CLI output when CTR is below the target."""
+    mock_deploy_page.return_value = "http://mockpages.com/test-idea-ctr-low"
+    mock_campaign_id_val = "mock-campaign-id-ctr-low"
+    mock_create_campaign.return_value = mock_campaign_id_val
+    mock_metrics_data = {
+        "clicks": 100,
+        "conversions": 2,
+        "ctr": 0.02,  # CTR below 0.05
+        "campaign_id": mock_campaign_id_val,
+        "total_cost": 30.0,
+    }
+    mock_get_metrics.return_value = mock_metrics_data
+
+    mock_sentinel_instance = mock_ad_sentinel_class.return_value
+    mock_sentinel_instance.check_spend.return_value = True  # Assume budget is fine
+
+    runner = CliRunner()
+    result = runner.invoke(
+        run_smoke_test,
+        [
+            "--idea-id",
+            "test-idea-ctr-low",
+            "--budget",
+            "50.0",
+            "--results-dir",
+            str(TEST_OUTPUT_BASE_DIR),
+        ],
+    )
+
+    assert result.exit_code == 0
+    assert "INFO: Actual CTR (0.0200) did not meet target (0.0500)." in result.output
+    assert "Budget increase not suggested based on CTR." in result.output
 
 
 def test_run_smoke_test_missing_idea_id():

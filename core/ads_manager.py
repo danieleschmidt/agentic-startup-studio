@@ -89,6 +89,35 @@ def get_campaign_metrics(campaign_id: str) -> Dict[str, Any]:
     return mock_metrics
 
 
+def adjust_campaign_budget(
+    campaign_id: str, new_budget: float, reason: str = "Performance based adjustment"
+) -> bool:
+    """
+    Simulates adjusting the budget for an existing Google Ads campaign.
+    In a real scenario, this would involve API calls to Google Ads.
+
+    Args:
+        campaign_id: The ID of the campaign to adjust.
+        new_budget: The new budget to set for the campaign.
+        reason: The reason for the budget adjustment.
+
+    Returns:
+        True if the budget adjustment was "successful", False otherwise.
+    """
+    if new_budget <= 0:
+        print(
+            f"Error: New budget for campaign {campaign_id} must be positive. "
+            f"Attempted: ${new_budget:.2f}"
+        )
+        return False
+
+    print(f"Simulating budget adjustment for campaign ID: {campaign_id}")
+    print(f"Setting new budget to: ${new_budget:.2f}. Reason: {reason}")
+    # In a real implementation, you'd make an API call here.
+    print(f"Mock budget adjustment successful for campaign {campaign_id}.")
+    return True
+
+
 if __name__ == "__main__":
     print("--- Testing Ads Manager Functions ---")
 
@@ -123,5 +152,15 @@ if __name__ == "__main__":
     assert metrics["clicks"] == 100
     assert metrics["ctr"] == 0.10
     print("get_campaign_metrics tests passed.")
+
+    # Test adjust_campaign_budget
+    print("\nTesting adjust_campaign_budget...")
+    adj_success = adjust_campaign_budget(campaign_id_val, 150.0, "Initial boost")
+    assert adj_success is True
+    adj_fail_zero = adjust_campaign_budget(campaign_id_val, 0.0)
+    assert adj_fail_zero is False
+    adj_fail_neg = adjust_campaign_budget(campaign_id_val, -50.0)
+    assert adj_fail_neg is False
+    print("adjust_campaign_budget tests passed.")
 
     print("\n--- Ads Manager Functions Test Finished ---")

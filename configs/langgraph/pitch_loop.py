@@ -10,15 +10,29 @@ except ImportError:
 from langgraph.graph import StateGraph, END
 
 import os  # For environment variables
+import click  # For console alert handler
 
 # Assuming core modules are accessible via PYTHONPATH
 from core.evidence_collector import EvidenceCollector
 from core.deck_generator import generate_deck_content
 from core.investor_scorer import load_investor_profile, score_pitch_with_rubric
+from core.token_budget_sentinel import TokenBudgetSentinel
+from core.evidence_summarizer import summarize_evidence  # Import new summarizer
 
 
 # --- Configuration ---
 FUND_THRESHOLD = float(os.getenv("FUND_THRESHOLD", "0.8"))
+MAX_PITCH_LOOP_TOKENS = 1000  # Define max tokens for the entire loop
+
+
+# Simple alert handler for demonstration
+def _console_alert_handler(message: str):
+    click.echo(f"TOKEN_BUDGET_ALERT: {message}", err=True)
+
+
+token_sentinel = TokenBudgetSentinel(
+    max_tokens=MAX_PITCH_LOOP_TOKENS, alert_callback=_console_alert_handler
+)
 
 
 # --- Define State Schema ---
@@ -36,6 +50,10 @@ class GraphState(TypedDict):
     funding_score: Optional[float]
     current_phase: str  # To track which phase (Ideate, Research, etc.)
     final_status: Optional[str]  # New field for funded/rejected status
+    total_tokens_consumed: int  # New field
+    token_budget_alerts: List[str]  # New field
+    token_budget_exceeded: bool  # New field
+    evidence_summary: Optional[str]  # New field for summary
 
 
 # --- Define Nodes ---
@@ -49,7 +67,22 @@ def ideate_node(state: GraphState) -> Dict[str, Any]:
     print("--- Running Ideate Node ---")
     # In a real scenario, this would involve LLM calls or agent interactions
     # to generate or refine an idea.
-    updated_state = {
+
+    IDEATE_COST = 200
+    current_total_tokens = state.get("total_tokens_consumed", 0)
+    budget_already_exceeded = state.get("token_budget_exceeded", False)
+
+    is_within_budget_for_step = token_sentinel.check_usage(
+        current_total_tokens + IDEATE_COST, "Ideate Node"
+    )
+    new_total_tokens = current_total_tokens + IDEATE_COST
+    # If budget was already exceeded, or this step exceeded it
+    final_budget_exceeded_status = (
+        budget_already_exceeded or not is_within_budget_for_step
+    )
+
+    # Node logic (mocked)
+    updated_values = {
         "idea_name": "AI-Powered Personalized Meal Planner",
         "idea_description": (
             "A platform that uses AI to create custom meal plans based on dietary "
@@ -57,12 +90,17 @@ def ideate_node(state: GraphState) -> Dict[str, Any]:
             "It also generates shopping lists and provides cooking instructions."
         ),
         "current_phase": "Ideate",
-        "evidence_items": [],  # Initialize for research phase
-        "investor_feedback": [],  # Initialize
+        "evidence_items": [],
+        "investor_feedback": [],
     }
-    print(f"  Generated Idea: {updated_state['idea_name']}")
-    print(f"  Description: {updated_state['idea_description'][:50]}...")
-    return updated_state
+    print(f"  Generated Idea: {updated_values['idea_name']}")
+    print(f"  Description: {updated_values['idea_description'][:50]}...")
+
+    return {
+        **updated_values,
+        "total_tokens_consumed": new_total_tokens,
+        "token_budget_exceeded": final_budget_exceeded_status,
+    }
 
 
 def research_node(state: GraphState) -> Dict[str, Any]:
@@ -80,15 +118,28 @@ def research_node(state: GraphState) -> Dict[str, Any]:
     # Instantiate EvidenceCollector (using its default mock search tool for now)
     # In a real setup, the search_tool might be configured globally or passed via state
     collector = EvidenceCollector(min_citations_per_claim=2)
-    evidence_result = collector.collect_and_verify_evidence(claim=mock_claim)
 
+    RESEARCH_COST = 350  # Includes EvidenceCollector's simulated cost
+    current_total_tokens = state.get("total_tokens_consumed", 0)
+    budget_already_exceeded = state.get("token_budget_exceeded", False)
+    is_within_budget_for_step = token_sentinel.check_usage(
+        current_total_tokens + RESEARCH_COST, "Research Node (incl. Evidence)"
+    )
+    new_total_tokens = current_total_tokens + RESEARCH_COST
+    final_budget_exceeded_status = (
+        budget_already_exceeded or not is_within_budget_for_step
+    )
+
+    evidence_result = collector.collect_and_verify_evidence(claim=mock_claim)
     print(f"  Evidence Collector Result Status: {evidence_result['status']}")
     print(f"  Found {evidence_result['search_tool_provided_count']} new sources.")
 
     return {
         "current_claim": mock_claim,
-        "evidence_items": [evidence_result],  # Store the full result as one item
+        "evidence_items": [evidence_result],
         "current_phase": "Research",
+        "total_tokens_consumed": new_total_tokens,
+        "token_budget_exceeded": final_budget_exceeded_status,
     }
 
 
@@ -96,13 +147,33 @@ def deck_generation_node(state: GraphState) -> Dict[str, Any]:
     """
     Placeholder node for pitch deck generation.
     Uses the deck_generator to create Marp content.
+    It also now summarizes evidence before deck generation.
     """
     print("--- Running Deck Generation Node ---")
     idea_name = state.get("idea_name", "Untitled Idea")
     idea_description = state.get("idea_description", "No description provided.")
-    # evidence_items = state.get("evidence_items", []) # Could be used in a real deck
+    evidence_items = state.get("evidence_items", [])
 
-    # Prepare data for the deck generator
+    # 1. Summarize Evidence
+    print(f"  Summarizing {len(evidence_items)} evidence items...")
+    # The first item in evidence_items is the EvidenceCollector's result dict.
+    # This dict contains 'all_sources', which is a List[str] (URLs).
+    # summarize_evidence expects List[Dict[str, Any]] with 'source_url' or 'url'.
+
+    actual_evidence_list_for_summary = []
+    if evidence_items and isinstance(evidence_items[0], dict):
+        source_urls_from_collector = evidence_items[0].get("all_sources", [])
+        # Wrap URLs in dicts to match summarize_evidence's expected input structure.
+        actual_evidence_list_for_summary = [
+            {"source_url": url} for url in source_urls_from_collector
+        ]
+
+    summary = summarize_evidence(
+        actual_evidence_list_for_summary, summary_length="medium"
+    )
+    print(f"  Evidence Summary: {summary[:100]}...")  # Print snippet of summary
+
+    # 2. Prepare data for the deck generator
     deck_data = {
         "title": idea_name,
         "subtitle": f"A Revolutionary Approach: {idea_description[:60]}...",
@@ -120,7 +191,8 @@ def deck_generation_node(state: GraphState) -> Dict[str, Any]:
                 "content": (
                     "* Our solution leverages cutting-edge technology.\n"
                     "* Key benefits include enhanced productivity and user "
-                    "satisfaction."
+                    f"satisfaction.\n\n"
+                    f"**Evidence Summary:** {summary}"  # Integrate summary here
                 ),
             },
             {
@@ -141,9 +213,23 @@ def deck_generation_node(state: GraphState) -> Dict[str, Any]:
     else:
         print(f"  Successfully generated deck for: {idea_name}")
 
+    DECK_GENERATION_COST = 300  # Assuming summarization cost is part of this
+    current_total_tokens = state.get("total_tokens_consumed", 0)
+    budget_already_exceeded = state.get("token_budget_exceeded", False)
+    is_within_budget_for_step = token_sentinel.check_usage(
+        current_total_tokens + DECK_GENERATION_COST, "Deck Generation Node"
+    )
+    new_total_tokens = current_total_tokens + DECK_GENERATION_COST
+    final_budget_exceeded_status = (
+        budget_already_exceeded or not is_within_budget_for_step
+    )
+
     return {
         "deck_content": generated_deck_md,
+        "evidence_summary": summary,  # Store the summary in state
         "current_phase": "DeckGeneration",
+        "total_tokens_consumed": new_total_tokens,
+        "token_budget_exceeded": final_budget_exceeded_status,
     }
 
 
@@ -185,10 +271,23 @@ def investor_review_node(state: GraphState) -> Dict[str, Any]:
     # qualitative_feedback = call_gemini_pro_investor_agent(...)
     # feedback_items.extend(qualitative_feedback)
 
+    INVESTOR_REVIEW_COST = 250
+    current_total_tokens = state.get("total_tokens_consumed", 0)
+    budget_already_exceeded = state.get("token_budget_exceeded", False)
+    is_within_budget_for_step = token_sentinel.check_usage(
+        current_total_tokens + INVESTOR_REVIEW_COST, "Investor Review Node"
+    )
+    new_total_tokens = current_total_tokens + INVESTOR_REVIEW_COST
+    final_budget_exceeded_status = (
+        budget_already_exceeded or not is_within_budget_for_step
+    )
+
     return {
         "investor_feedback": feedback_items,
         "funding_score": final_score,
-        "current_phase": "InvestorReviewCompleted",  # More specific phase
+        "current_phase": "InvestorReviewCompleted",
+        "total_tokens_consumed": new_total_tokens,
+        "token_budget_exceeded": final_budget_exceeded_status,
     }
 
 
@@ -275,8 +374,14 @@ if __name__ == "__main__":
         "investor_feedback": [],
         "funding_score": None,
         "current_phase": "Initial",
-        "final_status": None,  # Initialize new field
+        "final_status": None,
+        "total_tokens_consumed": 0,  # Initialize token usage
+        "token_budget_alerts": [],  # Initialize alerts list
+        "token_budget_exceeded": False,  # Initialize budget exceeded flag
     }
+
+    # Clear any alerts from previous runs if sentinel is global
+    token_sentinel.clear_alerts()
 
     print(
         f"\n--- Invoking graph with default mock scoring "
@@ -285,6 +390,10 @@ if __name__ == "__main__":
     # The mock score in investor_review_node is random(0.5, 1.0).
     # Default FUND_THRESHOLD is 0.8. So, this might go to funded or rejected.
     final_state_run1 = app.invoke(initial_state)
+
+    # Fetch all alerts that might have been internally stored by the sentinel
+    final_state_run1["token_budget_alerts"] = token_sentinel.get_alerts()
+
     print("\n--- Final State (Run 1) ---")
     for key, value in final_state_run1.items():
         if key == "evidence_items" and isinstance(value, list) and value:
@@ -294,6 +403,27 @@ if __name__ == "__main__":
         else:
             print(f"{key}: {value}")
     print(f"Final decision from state: {final_state_run1.get('final_status')}")
+
+    click.echo("\n--- Token Budget Sentinel Report (Run 1) ---")
+    click.echo(f"Max Pitch Loop Tokens: {MAX_PITCH_LOOP_TOKENS}")
+    tokens_consumed = final_state_run1.get("total_tokens_consumed")
+    click.echo(f"Total Tokens Consumed: {tokens_consumed}")
+    budget_exceeded_state = final_state_run1.get("token_budget_exceeded")
+    click.echo(f"Budget Exceeded Flag in State: {budget_exceeded_state}")
+
+    # Sentinel's direct check based on its max_tokens
+    if tokens_consumed is not None and tokens_consumed > MAX_PITCH_LOOP_TOKENS:
+        click.echo(
+            f"Final Tally: Total consumed ({tokens_consumed}) > budget "
+            f"({MAX_PITCH_LOOP_TOKENS}). Budget definitely exceeded."
+        )
+
+    if final_state_run1.get("token_budget_alerts"):
+        click.echo("Alerts Recorded by Sentinel:")
+        for alert_idx, alert_msg in enumerate(final_state_run1["token_budget_alerts"]):
+            click.echo(f"- Alert {alert_idx + 1}: {alert_msg}")
+    else:
+        click.echo("No token budget alerts recorded by sentinel.")
 
     # To test a specific path (e.g., rejected), manipulate FUND_THRESHOLD for this run
     # (env var is preferred for external config).

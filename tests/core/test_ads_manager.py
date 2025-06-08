@@ -3,8 +3,11 @@ from core.ads_manager import (
     deploy_landing_page_to_unbounce,
     create_google_ads_campaign,
     get_campaign_metrics,
+    adjust_campaign_budget,  # Import the new function
 )
 from typing import Dict, Any
+# import re # Not needed for these tests
+# from unittest import mock # Not needed for these tests unless time.sleep is mocked.
 
 
 def test_deploy_landing_page_to_unbounce():
@@ -78,3 +81,20 @@ def test_get_campaign_metrics():
     assert result_another["campaign_id"] == another_campaign_id
     # Other metrics are static in the mock, so they'll be the same
     assert result_another["impressions"] == 1000
+
+
+def test_adjust_campaign_budget_success():
+    campaign_id = "test-campaign-adjust"
+    new_budget = 150.0
+    reason = "Good CTR performance"
+    success = adjust_campaign_budget(campaign_id, new_budget, reason)
+    assert success is True
+
+
+def test_adjust_campaign_budget_invalid_budget():
+    campaign_id = "test-campaign-adjust-fail"
+    new_budget_zero = 0.0
+    new_budget_negative = -50.0
+
+    assert adjust_campaign_budget(campaign_id, new_budget_zero) is False
+    assert adjust_campaign_budget(campaign_id, new_budget_negative) is False

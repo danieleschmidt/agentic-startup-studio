@@ -1,0 +1,10 @@
+{
+    "campaign_id": "mock-gads-campaign-idea-smoke-test-ctr-low-ad-campaign-6915",
+    "impressions": 1000,
+    "clicks": 100,
+    "ctr": 0.1,
+    "conversions": 5,
+    "conversion_rate": 0.05,
+    "cost_per_click": 1.5,
+    "total_cost": 150.0
+}

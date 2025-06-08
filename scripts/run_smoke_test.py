@@ -15,6 +15,7 @@ from core.ads_manager import (
 from core.ad_budget_sentinel import AdBudgetSentinel  # Import AdBudgetSentinel
 
 SMOKE_TEST_RESULTS_DIR = "smoke_tests"  # Default results directory
+TARGET_CTR_FOR_BUDGET_INCREASE = 0.05  # 5% CTR target for budget increase
 
 
 @click.command()
@@ -131,6 +132,31 @@ def run_smoke_test(idea_id: str, budget: float, results_dir: str):
         )
     else:
         click.echo(f"Ad spend for campaign {campaign_id} is within budget.")
+
+    # Compare CTR and suggest budget increase if applicable
+    actual_ctr = metrics.get("ctr", 0.0)
+    click.echo(
+        f"Comparing actual CTR ({actual_ctr:.4f}) against target CTR "
+        f"({TARGET_CTR_FOR_BUDGET_INCREASE:.4f})."
+    )
+    if actual_ctr >= TARGET_CTR_FOR_BUDGET_INCREASE:
+        suggested_next_budget = budget * 1.5  # Example: Suggest 50% increase
+        click.echo(
+            f"SUCCESS: Actual CTR ({actual_ctr:.4f}) met or exceeded target "
+            f"({TARGET_CTR_FOR_BUDGET_INCREASE:.4f}). "
+            f"Consider increasing budget for next run. "
+            f"Suggested next budget: ${suggested_next_budget:.2f}"
+        )
+        # In a real system, this might trigger a call to:
+        # core.ads_manager.adjust_campaign_budget(
+        #     campaign_id, suggested_next_budget, "CTR target met"
+        # )
+    else:
+        click.echo(
+            f"INFO: Actual CTR ({actual_ctr:.4f}) did not meet target "
+            f"({TARGET_CTR_FOR_BUDGET_INCREASE:.4f}). "
+            "Budget increase not suggested based on CTR."
+        )
 
     # 6. Store mock metrics
     click.echo("Step 6: Storing mock metrics...")
