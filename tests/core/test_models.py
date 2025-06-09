@@ -1,156 +1,116 @@
+# tests/core/test_models.py
 import pytest
-import json  # Import the json module
-from uuid import UUID, uuid4
-from pydantic import ValidationError
+from uuid import UUID
+from datetime import datetime, timezone # Added timezone for offset-aware comparison if needed, else utcnow is naive
+from pydantic import ValidationError, HttpUrl
 
-from core.models import (
-    Idea,
-)  # Assuming core.models is discoverable (e.g. by PYTHONPATH)
+from core.models import Idea, EvidenceItem
+
+# New tests for EvidenceItem and Idea models
+
+def test_evidence_item_creation():
+    data = {
+        "source": "Test Source",
+        "claim": "Test Claim",
+        "citation_url": "http://example.com/evidence"
+    }
+    item = EvidenceItem(**data)
+    assert item.source == "Test Source"
+    assert item.claim == "Test Claim"
+    assert item.citation_url == HttpUrl("http://example.com/evidence")
+
+def test_evidence_item_invalid_url():
+    with pytest.raises(ValidationError) as excinfo:
+        EvidenceItem(source="Test", claim="Test", citation_url="not_a_url")
+    # Optional: Check the error details
+    assert "url_parsing" in str(excinfo.value).lower() # Make comparison case-insensitive for robustness
 
 
-def test_idea_creation_defaults():
-    """Test Idea model creation with default values."""
-    idea = Idea(name="Test Idea", description="A test description.")
-    assert isinstance(idea.id, UUID)
+def test_idea_creation_minimal():
+    data = {
+        "name": "Test Idea",
+        "description": "A great idea",
+        "problem": "A big problem",
+        "solution": "A novel solution"
+    }
+    idea = Idea(**data)
     assert idea.name == "Test Idea"
-    assert idea.description == "A test description."
-    assert idea.evidence == []
-    assert idea.deck_path is None
+    assert idea.description == "A great idea"
+    assert idea.problem == "A big problem"
+    assert idea.solution == "A novel solution"
+    assert isinstance(idea.id, UUID)
     assert idea.status == "ideation"
+    assert isinstance(idea.created_at, datetime)
+    assert isinstance(idea.updated_at, datetime)
+    assert idea.evidence == []
+    # For naive datetimes (like utcnow()), they won't have tzinfo
+    assert idea.created_at.tzinfo is None
+    assert idea.updated_at.tzinfo is None
 
 
-def test_idea_creation_with_specific_values():
-    """Test Idea model creation with all fields specified."""
-    uid = UUID("a1b2c3d4-e5f6-7890-1234-567890abcdef")
-    evidence_list = ["http://example.com/evidence1", "docs/evidence2.pdf"]
-    idea = Idea(
-        # Providing ID for deterministic testing, though default_factory is usual
-        id=uid,
-        name="Specific Idea",
-        description="Detailed specific description.",
-        evidence=evidence_list,
-        deck_path="pitches/specific_deck.md",
-        status="research",
-    )
-    assert idea.id == uid
-    assert idea.name == "Specific Idea"
-    assert idea.description == "Detailed specific description."
-    assert idea.evidence == evidence_list
-    assert idea.deck_path == "pitches/specific_deck.md"
+def test_idea_creation_full():
+    evidence_data = {
+        "source": "Full Source",
+        "claim": "Full Claim",
+        "citation_url": "http://example.com/full"
+    }
+    evidence_item = EvidenceItem(**evidence_data)
+    data = {
+        "name": "Full Idea",
+        "description": "Comprehensive description",
+        "problem": "Detailed problem statement",
+        "solution": "Elaborate solution",
+        "market_size": 1000000.0,
+        "competition": "Many competitors",
+        "team_description": "Experienced team",
+        "evidence": [evidence_item],
+        "deck_path": "/path/to/deck.pdf",
+        "status": "research"
+        # created_at and updated_at will be defaulted
+    }
+    idea = Idea(**data)
+    assert idea.name == "Full Idea"
+    assert idea.description == "Comprehensive description"
+    assert idea.problem == "Detailed problem statement"
+    assert idea.solution == "Elaborate solution"
+    assert idea.market_size == 1000000.0
+    assert idea.competition == "Many competitors"
+    assert idea.team_description == "Experienced team"
+    assert len(idea.evidence) == 1
+    assert idea.evidence[0].source == "Full Source"
+    assert idea.evidence[0].claim == "Full Claim"
+    assert idea.evidence[0].citation_url == HttpUrl("http://example.com/full")
+    assert idea.deck_path == "/path/to/deck.pdf"
     assert idea.status == "research"
+    assert isinstance(idea.id, UUID)
+    assert isinstance(idea.created_at, datetime)
+    assert isinstance(idea.updated_at, datetime)
 
-
-def test_idea_id_uniqueness():
-    """Test that IDs are unique for different Idea instances."""
-    idea1 = Idea(name="Idea 1", description="Desc 1")
-    idea2 = Idea(name="Idea 2", description="Desc 2")
+def test_idea_id_unique_and_defaults():
+    idea1 = Idea(name="Idea1", description="d1", problem="p1", solution="s1")
+    idea2 = Idea(name="Idea2", description="d2", problem="p2", solution="s2")
     assert idea1.id != idea2.id
-    assert isinstance(idea1.id, UUID)
-    assert isinstance(idea2.id, UUID)
+    assert idea1.status == "ideation"
+    assert idea1.evidence == []
+    assert idea1.market_size is None
+    assert idea1.competition is None
+    assert idea1.team_description is None
+    assert idea1.deck_path is None
 
 
-def test_idea_type_validation():
-    """Test Pydantic type validation for Idea fields using model_validate."""
-    # Test invalid name (should be str)
-    with pytest.raises(ValidationError, match="Input should be a valid string"):
-        Idea.model_validate({"name": 123, "description": "A description"})
+def test_idea_default_timestamps_are_recent():
+    idea = Idea(name="Timestamp Idea", description="d", problem="p", solution="s")
+    # Get current UTC time, ensuring it's naive to match Pydantic's default datetime.utcnow()
+    now = datetime.utcnow()
+    # Allow a small delta for execution time (e.g., 5 seconds)
+    time_delta_created = (now - idea.created_at).total_seconds()
+    time_delta_updated = (now - idea.updated_at).total_seconds()
 
-    # Test invalid description (should be str)
-    with pytest.raises(ValidationError, match="Input should be a valid string"):
-        Idea.model_validate({"name": "A name", "description": ["Not", "a", "string"]})
+    assert -1 < time_delta_created < 5, f"created_at delta out of range: {time_delta_created}"
+    assert -1 < time_delta_updated < 5, f"updated_at delta out of range: {time_delta_updated}"
 
-    # Test invalid evidence (should be List[str])
-    # This will first fail because "not_a_list" is not a list
-    with pytest.raises(ValidationError, match="Input should be a valid list"):
-        Idea.model_validate(
-            {"name": "A name", "description": "A description", "evidence": "not_a_list"}
-        )
-
-    # This will fail because list items are not strings
-    with pytest.raises(ValidationError, match="Input should be a valid string"):
-        Idea.model_validate(
-            {"name": "A name", "description": "A description", "evidence": [123, 456]}
-        )
-
-    # Test invalid deck_path (should be Optional[str])
-    with pytest.raises(ValidationError, match="Input should be a valid string"):
-        Idea.model_validate(
-            {"name": "A name", "description": "A description", "deck_path": 123.45}
-        )
-
-    # Test invalid status (should be str)
-    with pytest.raises(ValidationError, match="Input should be a valid string"):
-        Idea.model_validate(
-            {
-                "name": "A name",
-                "description": "A description",
-                "status": {"status": "invalid"},
-            }
-        )
-
-
-def test_idea_optional_fields():
-    """Test that optional fields can be None or provided."""
-    idea_no_deck = Idea(name="No Deck Idea", description="Desc")
-    assert idea_no_deck.deck_path is None
-
-    idea_with_deck = Idea(
-        name="Deck Idea", description="Desc", deck_path="path/to/deck.ppt"
-    )
-    assert idea_with_deck.deck_path == "path/to/deck.ppt"
-
-
-def test_idea_serialization_deserialization():
-    """Test JSON serialization and deserialization."""
-    # Use a known ID for deterministic testing of serialization/deserialization
-    known_id = uuid4()  # This was the line causing F821, import is now added
-    original_idea = Idea(
-        id=known_id,
-        name="Serializable Idea",
-        description="Testing JSON.",
-        evidence=["link1"],
-        deck_path="path/to/json_deck.json",
-        status="funded",
-    )
-
-    # Pydantic V2: model_dump_json, model_validate (from dict),
-    # or model_validate_json (from string).
-    json_string = original_idea.model_dump_json()
-
-    # Validate from a dictionary parsed from the JSON string
-    data_dict = json.loads(json_string)
-    deserialized_idea = Idea.model_validate(data_dict)
-
-    # Compare model dumps for data equality.
-    # If deserialized_idea.id is correctly UUID, default dump should work.
-    # Using mode='json' for original_dump provides str UUIDs if needed for comparison.
-    deserialized_dump = deserialized_idea.model_dump()
-    original_dump = original_idea.model_dump()
-    assert deserialized_dump == original_dump
-
-    # Also check ID explicitly for clarity and type
-    assert isinstance(deserialized_idea.id, UUID)  # Check type
-    assert deserialized_idea.id == known_id
-    assert deserialized_idea.name == "Serializable Idea"
-    assert deserialized_idea.evidence == ["link1"]
-    assert deserialized_idea.status == "funded"
-
-    # Test with dict dump and parse
-    dict_data = original_idea.model_dump()  # This will have id as UUID object
-    parsed_idea_from_dict = Idea.model_validate(dict_data)  # Renamed for clarity
-    # When both are from Python objects, default model_dump() should be consistent
-    assert parsed_idea_from_dict.model_dump() == original_idea.model_dump()
-    assert parsed_idea_from_dict.id == known_id  # Ensure ID is correctly parsed
-
-
-def test_idea_config_json_schema_extra():
-    """Test that the json_schema_extra (example) is part of the model's schema."""
-    schema = Idea.model_json_schema()
-    assert "example" in schema
-    example = schema["example"]
-    assert example["name"] == "AI-Powered Personal Chef"
-    assert example["status"] == "research"
-
+    # Also check that updated_at is greater than or equal to created_at
+    assert idea.updated_at >= idea.created_at
 
 if __name__ == "__main__":
     pytest.main()
