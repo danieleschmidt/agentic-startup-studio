@@ -1,3 +1,58 @@
+version: '3.8'
+
+services:
+  redis:
+    image: redis:alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+
+  postgres:
+    image: pgvector/pgvector:pg16
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_DB: dittofeed
+      POSTGRES_USER: dittofeed
+      POSTGRES_PASSWORD: password
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  posthog:
+    image: posthog/posthog:latest
+    ports:
+      - "8000:8000"
+    environment:
+      POSTGRES_HOST: postgres
+      POSTGRES_DB: dittofeed
+      POSTGRES_USER: dittofeed
+      POSTGRES_PASSWORD: password
+      REDIS_HOST: redis
+    volumes:
+      - posthog_data:/var/lib/posthog
+    depends_on:
+      - postgres
+      - redis
+
+  dittofeed:
+    image: dittofeed/dittofeed-ce:latest
+    ports:
+      - "3000:3000"
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://dittofeed:password@postgres:5432/dittofeed
+      REDIS_URL: redis://redis:6379
+      CLICKHOUSE_HOST: posthog
+      CLICKHOUSE_DATABASE: dittofeed
+      CLICKHOUSE_USERNAME: ""
+      CLICKHOUSE_PASSWORD: ""
+      POSTHOG_API_KEY: "" # Needs to be set by user
+      POSTHOG_PROJECT_ID: "" # Needs to be set by user
+    depends_on:
+      - postgres
+      - redis
+      - posthog
 version: "3.9"   # modern Compose spec
 
 services:
@@ -57,6 +112,7 @@ services:
 
 volumes:
   redis_data:
+  postgres_data:
   pgdata:
   chdata:
   posthog_data:
