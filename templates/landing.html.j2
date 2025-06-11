@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8"/>
+    <title>{{ idea_name }} – Early Access</title>
+    <script>
+      // PostHog snippet (self-hosted)
+      !function(t,e){var o,n,p,r;e.__SV||(window.posthog=e,e._i=[],e.init=function(i,s,a){
+      function c(t,e){var o=e.split(".");2==o.length&&(t=t[o[0]],e=o[1]),
+      t[e]=function(){t.push([e].concat(Array.prototype.slice.call(arguments,0)))}}(o=t.createElement("script")).type="text/javascript",
+      o.async=!0,o.src=s.api_host+"/static/array.js",(r=t.getElementsByTagName("script")[0]).parentNode.insertBefore(o,r);
+      var u=e;for(void 0!==a?u=e[a]=[]:a="posthog",u.people=u.people||[],
+      u.toString=function(t){var e="posthog";return"posthog"!==a&&(e+="."+a),t||(e+=" (stub)"),e},
+      u.people.toString=function(){return u.toString(1)+".people (stub)"},n=
+      "capture identify alias people.set people.set_once".split(" "),p=0;p<n.length;p++)c(u,n[p]);e._i.push([i,s,a])},
+      e.__SV=1)}(document,window.posthog||[]);
+      posthog.init("{{ posthog_key }}",{api_host:"{{ posthog_host }}"});     //  docs :contentReference[oaicite:0]{index=0}
+    </script>
+  </head>
+  <body>
+    <h1>{{ idea_name }}</h1>
+    <p>{{ idea_tagline }}</p>
+
+    <form id="early-signup">
+      <input type="email" name="email" placeholder="you@example.com" required>
+      <button>Notify me</button>
+    </form>
+
+    <script>
+      document.getElementById("early-signup").addEventListener("submit", e=>{
+        e.preventDefault();
+        posthog.capture('early_signup', {idea_id: "{{ idea_id }}"});
+        e.target.innerHTML = "🎉 Thanks – we'll keep you posted!";
+      });
+    </script>
+  </body>
+</html>

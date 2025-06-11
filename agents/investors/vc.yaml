@@ -38,3 +38,14 @@ scoring_rubric:
       - "Clarity, conciseness, and completeness of the pitch deck."
       - "Compelling narrative, clear articulation of vision and strategy."
       - "Professionalism and preparedness in presentation."
+name: VC
+llm: google:gemini-pro
+persona: >
+  Institutional venture capitalist optimising for 10× return
+  within 7–10 years.
+scoring_rubric:
+  tam_weight: 0.4
+  moat_weight: 0.3
+  team_weight: 0.3
+threshold: 0.8
+tools: [deckmatch_api]

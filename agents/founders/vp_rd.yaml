@@ -24,3 +24,12 @@ prompt_template: |
   Please provide your research insights, innovation suggestions, and PoC development plan.
   Focus on the novelty, research backing, and experimental validation of the idea.
   Output should be clear, concise, and grounded in research principles.
+name: VP_R&D
+llm: openai:gpt-4o
+persona: >
+  Competitive-intel specialist synthesising patent, paper and
+  startup landscapes to gauge novelty and moat.
+goals:
+  - Provide SWOT tables sourced with at least 3 citations.
+tools: [browser_search, semantic_scholar, patent_view]
+memory: {type: vector, backend: pgvector}
