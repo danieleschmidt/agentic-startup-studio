@@ -285,11 +285,11 @@ async def list_ideas(status, stage, category, limit, search, sort, desc, output)
 
 
 @cli.command()
-@click.argument('idea_id', type=str)
+@click.option('--id', 'idea_id', required=True, help='ID of the idea to retrieve')
 @click.option('--output', type=click.Choice(['json', 'detail']), default='detail',
               help='Output format')
 @handle_async
-async def show(idea_id, output):
+async def get(idea_id, output):
     """Show detailed information about a specific idea."""
     try:
         # Parse UUID
@@ -424,8 +424,9 @@ async def update(idea_id, title, description, category, problem, solution, marke
 
 
 @cli.command()
-@click.argument('idea_id', type=str)
-@click.argument('stage', type=click.Choice([s.value for s in PipelineStage]))
+@click.option('--id', 'idea_id', required=True, help='ID of the idea to advance')
+@click.option('--stage', required=True, type=click.Choice([s.value for s in PipelineStage]),
+              help='Target stage to advance to')
 @handle_async
 async def advance(idea_id, stage):
     """Advance an idea to the next pipeline stage."""
@@ -785,20 +786,3 @@ async def create_cli_interface() -> IdeaIngestionCLI:
     idea_manager = await get_idea_manager()
     return IdeaIngestionCLI(idea_manager)
 
-
-def main():
-    """Main CLI entry point."""
-    import sys
-    
-    # For now, just run the Click-based CLI
-    # In a full implementation, this would parse sys.argv and call appropriate CLI methods
-    if len(sys.argv) > 1 and sys.argv[1] == "--help":
-        console.print("[bold]Agentic Startup Studio CLI[/bold]")
-        console.print("Available commands: create, get, list, advance")
-    else:
-        # Delegate to Click CLI for now
-        cli()
-
-
-if __name__ == "__main__":
-    main()

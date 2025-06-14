@@ -1,0 +1,75 @@
+{
+  "name": "synthetic_users_3",
+  "data": {
+    "records": [
+      {
+        "user_id": "bdd640fb-0667-4ad1-9c80-317fa3b1799d",
+        "email": "user_bdd640fb@example.com",
+        "first_name": "User3045",
+        "last_name": "Test",
+        "phone": "555-0000",
+        "address": {
+          "street": "79402 Peterson Drives Apt. 511",
+          "city": "Davisstad",
+          "state": "Rhode Island",
+          "zip_code": "35172",
+          "country": "Sri Lanka"
+        },
+        "preferences": {
+          "newsletter": true,
+          "notifications": false,
+          "theme": "dark"
+        },
+        "created_at": "2025-04-15T03:00:14"
+      },
+      {
+        "user_id": "142c3fe8-60e7-4113-ac1b-8ca1f91e1d4c",
+        "email": "user_142c3fe8@example.com",
+        "first_name": "User2084",
+        "last_name": "Test",
+        "phone": "555-0000",
+        "address": {
+          "street": "327 Nelson Route",
+          "city": "Lake Mark",
+          "state": "Wyoming",
+          "zip_code": "07832",
+          "country": "Denmark"
+        },
+        "preferences": {
+          "newsletter": true,
+          "notifications": true,
+          "theme": "dark"
+        },
+        "created_at": "2025-02-21T23:45:46"
+      },
+      {
+        "user_id": "9132b63e-f162-47e4-a9c3-49e03602f8ac",
+        "email": "user_9132b63e@example.com",
+        "first_name": "User8123",
+        "last_name": "Test",
+        "phone": "555-0000",
+        "address": {
+          "street": "01226 Paul Ranch Suite 848",
+          "city": "Lake Jenniferside",
+          "state": "Wisconsin",
+          "zip_code": "35474",
+          "country": "Seychelles"
+        },
+        "preferences": {
+          "newsletter": false,
+          "notifications": true,
+          "theme": "light"
+        },
+        "created_at": "2025-02-26T23:48:35"
+      }
+    ],
+    "count": 3
+  },
+  "schema": {
+    "type": "users",
+    "count": 3
+  },
+  "source": "synthetic",
+  "created_at": null,
+  "tags": null
+}

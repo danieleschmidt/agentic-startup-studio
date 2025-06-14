@@ -1,0 +1,12 @@
+{
+  "run_id": "a6890fa7",
+  "status": "running",
+  "execution_time": 23.240281581878662,
+  "areas_tested": 1,
+  "success_rate": 0.0,
+  "total_validations": 1,
+  "passed": 0,
+  "failed": 1,
+  "errors": 0,
+  "overall_success": false
+}
