@@ -1,0 +1,53 @@
+[build-system]
+requires = ["setuptools >= 61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "dittofeed-self-hosted"
+version = "0.1.0"
+description = "Configuration for self-hosting Dittofeed."
+readme = "README.md"
+requires-python = ">=3.9" # Aligning with common practices, can be >=3.11 if strictly needed
+# Add dependencies here if this project were to become a package
+# dependencies = [
+#     "some-package",
+# ]
+
+[tool.ruff]
+# Set a line length.
+line-length = 88 # Default for Black, a common formatter
+
+[tool.ruff.lint]
+# Enable Pyflakes (F) and pycodestyle (E) rules by default.
+# Consider adding more rule sets like "W" (pycodestyle warnings), "I" (isort) later.
+select = ["E", "F"]
+
+# Specify files/directories to lint (current directory).
+# Ruff automatically discovers Python files.
+# You can also specify extend-exclude to ignore certain directories further.
+# extend-exclude = [
+#     "docs/",
+#     "some_generated_code/",
+# ]
+
+# Example: Ignore a specific rule if needed (e.g., E501 line too long if not auto-formatting)
+# ignore = ["E501"]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["F401"] # Ignore unused import (pytest) in test files
+
+[tool.pytest.ini_options]
+minversion = "6.0"
+addopts = "-ra -q" # Basic options: report all except passes, quiet
+testpaths = [
+    "tests",
+    # "integration", # If you have integration tests in a separate folder
+]
+python_files = "test_*.py"
+python_classes = "Test*"
+python_functions = "test_*"
+
+# If you need to set environment variables for tests:
+# env = [
+#     "MY_VARIABLE=my_value"
+# ]
