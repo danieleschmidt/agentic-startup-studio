@@ -251,6 +251,11 @@ MAX_IDEAS_PER_HOUR=10
 TOTAL_CYCLE_BUDGET=62.00
 OPENAI_BUDGET=10.00
 GOOGLE_ADS_BUDGET=45.00
+
+# PostHog Integration (Optional)
+# Used for sending smoke test campaign metrics
+POSTHOG_API_KEY=your_posthog_api_key  # Replace with your PostHog project API key
+POSTHOG_HOST=https://app.posthog.com  # Replace with your PostHog instance host if self-hosting
 ```
 
 ### Configuration Categories
@@ -262,6 +267,24 @@ GOOGLE_ADS_BUDGET=45.00
 | **Embedding** | Text embedding configuration | Provider, model, caching |
 | **Logging** | Application logging | Levels, formats, destinations |
 | **Budget** | Cost control and monitoring | Limits, thresholds, alerts |
+| **Analytics** | Metrics and event tracking | PostHog API Key, Host |
+
+---
+
+### PostHog Integration for Smoke Tests
+
+The `run_smoke_test.py` script can send campaign performance metrics to PostHog for analysis. To enable this feature, you need to configure the following environment variables:
+
+-   `POSTHOG_API_KEY`: Your PostHog Project API Key.
+-   `POSTHOG_HOST`: The URL of your PostHog instance (e.g., `https://app.posthog.com` or your self-hosted URL).
+
+Example:
+```bash
+export POSTHOG_API_KEY="your_actual_posthog_api_key"
+export POSTHOG_HOST="https://app.posthog.com"
+```
+
+If these variables are not set, the PostHog integration will be disabled, and a warning message will be logged during the smoke test execution.
 
 ---
 

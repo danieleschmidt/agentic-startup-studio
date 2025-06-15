@@ -2,6 +2,7 @@ import click
 import json
 import os
 import time
+import posthog
 
 # Assuming core.ads_manager and core.idea_ledger are accessible
 # This script is intended to be run with PYTHONPATH including the project root.
@@ -16,6 +17,45 @@ from core.ad_budget_sentinel import AdBudgetSentinel  # Import AdBudgetSentinel
 
 SMOKE_TEST_RESULTS_DIR = "smoke_tests"  # Default results directory
 TARGET_CTR_FOR_BUDGET_INCREASE = 0.05  # 5% CTR target for budget increase
+
+# Initialize PostHog client
+POSTHOG_API_KEY = os.environ.get("POSTHOG_API_KEY")
+POSTHOG_HOST = os.environ.get("POSTHOG_HOST")
+
+if POSTHOG_API_KEY and POSTHOG_HOST:
+    posthog.project_api_key = POSTHOG_API_KEY
+    posthog.host = POSTHOG_HOST
+else:
+    click.echo("Warning: PostHog API key or host not configured. Skipping PostHog integration.", err=True)
+    posthog.disabled = True # Disable PostHog if not configured
+
+# Disable PostHog client during tests
+if os.environ.get("PYTEST_CURRENT_TEST"):
+    posthog.disabled = True
+
+
+def send_metrics_to_posthog(idea_id: str, metrics: dict, campaign_config: dict, deployment_url: str):
+    """Sends campaign metrics to PostHog."""
+    if posthog.disabled:
+        click.echo("PostHog is disabled. Skipping sending metrics.")
+        return
+
+    event_name = f"smoke_test_campaign_metrics"
+    properties = {
+        "idea_id": idea_id,
+        "campaign_name": campaign_config.get("name"),
+        "deployment_url": deployment_url,
+        **metrics,  # Include all metrics
+    }
+    # Use a distinct_id that represents the system or the specific smoke test run
+    # For example, using the idea_id or a generated session ID
+    distinct_id = f"smoke_test_system_{idea_id}"
+
+    try:
+        posthog.capture(distinct_id, event=event_name, properties=properties)
+        click.echo(f"Successfully sent metrics to PostHog for idea: {idea_id}")
+    except Exception as e:
+        click.echo(f"Error sending metrics to PostHog: {e}", err=True)
 
 
 @click.command()
@@ -184,8 +224,10 @@ def run_smoke_test(idea_id: str, budget: float, results_dir: str):
         click.echo(f"Error saving metrics: {e}", err=True)
 
     # 7. Simulate pushing metrics to PostHog (placeholder)
-    click.echo("Step 7: Simulating push of metrics to PostHog (Placeholder)")
-    click.echo(f"Metrics for PostHog: {metrics}")
+    click.echo("Step 7: Pushing metrics to PostHog...")
+    # click.echo(f"Metrics for PostHog: {metrics}") # Old placeholder
+    send_metrics_to_posthog(idea_id, metrics, campaign_config, deployment_url)
+
 
     click.echo(f"Smoke test for Idea ID: {idea_id} completed.")
 

@@ -2,6 +2,7 @@
 langgraph>=0.0.32          # state-machine framework :contentReference[oaicite:0]{index=0}
 langchain>=0.2.0
 crewai>=0.23.2             # YAML-first agent runner :contentReference[oaicite:1]{index=1}
+langchain-openai
 
 # vector store & DB
 pgvector>=0.2.3
@@ -13,7 +14,9 @@ google-generativeai>=0.4.0
 duckduckgo-search>=4.8.0   # used in browser_search stub
 python-dotenv>=1.0.1
 pyyaml>=6.0.2
+pydantic-settings
 
 # misc
 tqdm
 rich
+posthog

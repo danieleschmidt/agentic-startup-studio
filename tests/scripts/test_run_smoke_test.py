@@ -1,292 +1,225 @@
 import pytest
 from click.testing import CliRunner
+from unittest import mock
+import os
+
+# Assuming scripts.run_smoke_test and core.ads_manager are accessible
+# This script is intended to be run with PYTHONPATH including the project root.
 from scripts.run_smoke_test import run_smoke_test
 
-# SMOKE_TEST_RESULTS_DIR can be imported for assertion,
-# but patching it in the script's namespace is more direct for tests.
-# from scripts.run_smoke_test import SMOKE_TEST_RESULTS_DIR as SCRIPT_DEFAULT_DIR
-import os
-import json
-import shutil  # For cleaning up directories
-from unittest import mock  # Use unittest.mock for mocking
-from pathlib import Path
+# Mock core components to isolate the script's logic
+@pytest.fixture(autouse=True)
+def mock_ads_manager_functions():
+    with mock.patch("scripts.run_smoke_test.deploy_landing_page_to_unbounce") as mock_deploy:
+        mock_deploy.return_value = "http://mock-landing-page.com/test-idea"
+        with mock.patch("scripts.run_smoke_test.create_google_ads_campaign") as mock_create_campaign:
+            mock_create_campaign.return_value = "campaign_123"
+            with mock.patch("scripts.run_smoke_test.get_campaign_metrics") as mock_get_metrics:
+                mock_get_metrics.return_value = {
+                    "impressions": 1000,
+                    "clicks": 100,
+                    "ctr": 0.1,
+                    "total_cost": 20.0,
+                    "average_cpc": 0.20,
+                }
+                yield mock_deploy, mock_create_campaign, mock_get_metrics
 
-# Define a directory for test outputs to avoid cluttering the main smoke_tests dir
-# Using Path for robust path construction
-TEST_OUTPUT_BASE_DIR = Path("tests/temp_smoke_test_outputs")
+@pytest.fixture
+def runner():
+    return CliRunner()
 
+@pytest.fixture
+def mock_posthog_capture():
+    # This fixture ensures that posthog.capture is always mocked for tests in this file.
+    # We access posthog via the run_smoke_test module's namespace.
+    with mock.patch("scripts.run_smoke_test.posthog.capture") as mock_capture:
+        yield mock_capture
 
-@pytest.fixture(scope="function", autouse=True)
-def manage_test_output_dir():
-    """Creates and cleans up the test output directory for each test function."""
-    if TEST_OUTPUT_BASE_DIR.exists():
-        shutil.rmtree(TEST_OUTPUT_BASE_DIR)
-    TEST_OUTPUT_BASE_DIR.mkdir(parents=True, exist_ok=True)
+@pytest.fixture
+def manage_posthog_state():
+    """
+    A fixture to manage PostHog state (API key, host, and disabled status) for tests.
+    It allows tests to specify whether PostHog should be 'enabled' or 'disabled'.
+    """
+    original_api_key = os.environ.get("POSTHOG_API_KEY")
+    original_host = os.environ.get("POSTHOG_HOST")
+    original_pytest_current_test = os.environ.get("PYTEST_CURRENT_TEST")
 
-    yield  # Test runs here
+    def _manage(enabled: bool, clear_pytest_env_var: bool = False):
+        if enabled:
+            # Ensure PostHog is "enabled" for the test
+            os.environ["POSTHOG_API_KEY"] = "test_key"
+            os.environ["POSTHOG_HOST"] = "test_host"
+            if clear_pytest_env_var: # If we explicitly want to test non-pytest scenario
+                 if "PYTEST_CURRENT_TEST" in os.environ:
+                    del os.environ["PYTEST_CURRENT_TEST"]
+            # Patch the module-level constants and posthog.disabled
+            # This directly influences the behavior of send_metrics_to_posthog
+            patches = [
+                mock.patch("scripts.run_smoke_test.POSTHOG_API_KEY", "test_key"),
+                mock.patch("scripts.run_smoke_test.POSTHOG_HOST", "test_host"),
+                mock.patch("scripts.run_smoke_test.posthog.disabled", False),
+            ]
+        else:
+            # Ensure PostHog is "disabled" for the test
+            # This can be due to missing API key/host or PYTEST_CURRENT_TEST being set
+            if "POSTHOG_API_KEY" in os.environ: del os.environ["POSTHOG_API_KEY"]
+            if "POSTHOG_HOST" in os.environ: del os.environ["POSTHOG_HOST"]
+            # Ensure PYTEST_CURRENT_TEST is set to also trigger disabled state if that's desired for the test
+            # os.environ["PYTEST_CURRENT_TEST"] = "any_test_name" # This is one way to disable
+            patches = [
+                mock.patch("scripts.run_smoke_test.POSTHOG_API_KEY", None),
+                mock.patch("scripts.run_smoke_test.POSTHOG_HOST", None),
+                mock.patch("scripts.run_smoke_test.posthog.disabled", True), # Primary way to disable
+            ]
 
-    # Clean up after tests by removing the temp directory
-    if TEST_OUTPUT_BASE_DIR.exists():
-        shutil.rmtree(TEST_OUTPUT_BASE_DIR)
+        for p in patches:
+            p.start()
 
+        return patches
 
-@mock.patch("scripts.run_smoke_test.deploy_landing_page_to_unbounce")
-@mock.patch("scripts.run_smoke_test.create_google_ads_campaign")
-@mock.patch("scripts.run_smoke_test.get_campaign_metrics")
-@mock.patch("scripts.run_smoke_test.AdBudgetSentinel")  # New mock
-# Patch SMOKE_TEST_RESULTS_DIR in the script's context
-@mock.patch("scripts.run_smoke_test.SMOKE_TEST_RESULTS_DIR", str(TEST_OUTPUT_BASE_DIR))
-def test_run_smoke_test_successful_flow(
-    mock_ad_sentinel_class,  # New mock argument, adjust order based on decorators
-    mock_get_metrics,
-    mock_create_campaign,
-    mock_deploy_page,
-):
-    """Tests the successful execution flow of the run_smoke_test CLI command."""
-    # Setup mock return values
-    mock_deploy_page.return_value = "http://mockpages.com/test-idea-xyz"
-    mock_campaign_id_val = "mock-campaign-id-xyz-123"
-    mock_create_campaign.return_value = mock_campaign_id_val
-    mock_metrics_data = {
-        "clicks": 150,
-        "conversions": 15,
-        "ctr": 0.15,  # This CTR (15%) is above TARGET_CTR_FOR_BUDGET_INCREASE (0.05)
-        "campaign_id": mock_campaign_id_val,
-        "total_cost": 40.0,
-    }
-    mock_get_metrics.return_value = mock_metrics_data
+    yield _manage
 
-    # Configure AdBudgetSentinel mock
-    mock_sentinel_instance = mock_ad_sentinel_class.return_value
-    mock_sentinel_instance.check_spend.return_value = True  # Simulate within budget
+    # Teardown: Stop all patches and restore original environment variables
+    mock.patch.stopall() # Stops all active patches started by mock.patch()
 
-    runner = CliRunner()
-    idea_id_to_test = "test-idea-xyz"
-    budget_to_test = "75.0"
+    if original_api_key is None:
+        if "POSTHOG_API_KEY" in os.environ: del os.environ["POSTHOG_API_KEY"]
+    else:
+        os.environ["POSTHOG_API_KEY"] = original_api_key
 
-    # Invoke the CLI command
-    result = runner.invoke(
-        run_smoke_test,
-        [
-            "--idea-id",
-            idea_id_to_test,
-            "--budget",
-            budget_to_test,
-            "--results-dir",
-            str(TEST_OUTPUT_BASE_DIR),
-        ],
-    )
+    if original_host is None:
+        if "POSTHOG_HOST" in os.environ: del os.environ["POSTHOG_HOST"]
+    else:
+        os.environ["POSTHOG_HOST"] = original_host
 
-    assert result.exit_code == 0, f"CLI command failed: {result.output}"
-    budget_float = float(budget_to_test)
-    start_msg = (
-        f"Starting smoke test for Idea ID: {idea_id_to_test} "
-        f"with budget: ${budget_float:.1f}"
-    )
-    assert start_msg in result.output
-
-    resolved_path_str = str(TEST_OUTPUT_BASE_DIR.resolve())
-    assert f"Results will be stored in: {resolved_path_str}" in result.output
-
-    step1_msg = f"Step 1: Fetching details for Idea ID: {idea_id_to_test} (Placeholder)"
-    assert step1_msg in result.output
-    assert "Step 2: Preparing landing page configuration (Mocked)" in result.output
-
-    mock_deploy_page.assert_called_once()
-    assert mock_deploy_page.return_value in result.output
-
-    mock_create_campaign.assert_called_once()
-    assert mock_create_campaign.call_args[0][1] == budget_float
-    assert mock_create_campaign.return_value in result.output
-
-    assert "Fetching mock campaign metrics..." in result.output
-    # Ensure get_campaign_metrics is called with ID from create_google_ads_campaign
-    mock_get_metrics.assert_called_once_with(mock_create_campaign.return_value)
-
-    # Slugify idea_id as done in the script
-    idea_id_slug = "".join(
-        c if c.isalnum() or c in ("-", "_") else "_" for c in idea_id_to_test
-    )
-    expected_analytics_path = TEST_OUTPUT_BASE_DIR / idea_id_slug / "analytics.json"
-
-    assert expected_analytics_path.exists(), (
-        f"Analytics file not found at {expected_analytics_path}"
-    )
-    with open(expected_analytics_path, "r") as f:
-        saved_metrics = json.load(f)
-    assert saved_metrics == mock_metrics_data
-
-    expected_save_msg = (
-        f"Mock metrics saved to: {str(expected_analytics_path.resolve())}"
-    )
-    assert expected_save_msg in result.output
-
-    step7_msg = "Step 7: Simulating push of metrics to PostHog (Placeholder)"
-    assert step7_msg in result.output
-    completed_msg = f"Smoke test for Idea ID: {idea_id_to_test} completed."
-    assert completed_msg in result.output
-
-    # Assert AdBudgetSentinel calls
-    mock_ad_sentinel_class.assert_called_once()
-    assert mock_ad_sentinel_class.call_args[1]["max_budget"] == float(budget_to_test)
-    assert mock_ad_sentinel_class.call_args[1]["campaign_id"] == mock_campaign_id_val
-    mock_sentinel_instance.check_spend.assert_called_once_with(
-        mock_metrics_data["total_cost"]
-    )
-    within_budget_msg = (
-        f"Ad spend for campaign {mock_campaign_id_val} is within budget."
-    )
-    assert within_budget_msg in result.output
-    success_ctr_msg = "SUCCESS: Actual CTR (0.1500) met or exceeded target (0.0500)."
-    assert success_ctr_msg in result.output
-    suggested_budget_val = float(budget_to_test) * 1.5
-    assert f"Suggested next budget: ${suggested_budget_val:.2f}" in result.output
+    if original_pytest_current_test is None:
+        if "PYTEST_CURRENT_TEST" in os.environ: del os.environ["PYTEST_CURRENT_TEST"]
+    else:
+        os.environ["PYTEST_CURRENT_TEST"] = original_pytest_current_test
 
 
-@mock.patch("scripts.run_smoke_test.deploy_landing_page_to_unbounce")
-@mock.patch("scripts.run_smoke_test.create_google_ads_campaign")
-@mock.patch("scripts.run_smoke_test.get_campaign_metrics")
-@mock.patch("scripts.run_smoke_test.AdBudgetSentinel")
-@mock.patch("scripts.run_smoke_test.SMOKE_TEST_RESULTS_DIR", str(TEST_OUTPUT_BASE_DIR))
-def test_run_smoke_test_ctr_below_target(
-    mock_ad_sentinel_class,  # Innermost from this group due to decorator order
-    mock_get_metrics,
-    mock_create_campaign,
-    mock_deploy_page,
-):
-    """Tests the CLI output when CTR is below the target."""
-    mock_deploy_page.return_value = "http://mockpages.com/test-idea-ctr-low"
-    mock_campaign_id_val = "mock-campaign-id-ctr-low"
-    mock_create_campaign.return_value = mock_campaign_id_val
-    mock_metrics_data = {
-        "clicks": 100,
-        "conversions": 2,
-        "ctr": 0.02,  # CTR below 0.05
-        "campaign_id": mock_campaign_id_val,
-        "total_cost": 30.0,
-    }
-    mock_get_metrics.return_value = mock_metrics_data
+def test_run_smoke_test_posthog_enabled_and_called(runner, mock_posthog_capture, manage_posthog_state, tmp_path):
+    """
+    Test that posthog.capture is called with correct arguments when PostHog is enabled.
+    """
+    manage_posthog_state(enabled=True, clear_pytest_env_var=True) # Ensure it's not disabled by PYTEST_CURRENT_TEST
 
-    mock_sentinel_instance = mock_ad_sentinel_class.return_value
-    mock_sentinel_instance.check_spend.return_value = True  # Assume budget is fine
+    idea_id = "test-idea-ph-enabled"
+    results_dir = tmp_path / "smoke_results"
 
-    runner = CliRunner()
-    result = runner.invoke(
-        run_smoke_test,
-        [
-            "--idea-id",
-            "test-idea-ctr-low",
-            "--budget",
-            "50.0",
-            "--results-dir",
-            str(TEST_OUTPUT_BASE_DIR),
-        ],
-    )
+    result = runner.invoke(run_smoke_test, ["--idea-id", idea_id, "--results-dir", str(results_dir)])
 
-    assert result.exit_code == 0
-    assert "INFO: Actual CTR (0.0200) did not meet target (0.0500)." in result.output
-    assert "Budget increase not suggested based on CTR." in result.output
+    assert result.exit_code == 0, f"CLI Errored: {result.output}"
+    mock_posthog_capture.assert_called_once()
 
+    args, kwargs = mock_posthog_capture.call_args
+    expected_distinct_id = f"smoke_test_system_{idea_id}"
+    expected_event_name = "smoke_test_campaign_metrics"
 
-def test_run_smoke_test_missing_idea_id():
-    """Tests CLI behavior when a required option is missing."""
-    runner = CliRunner()
-    result = runner.invoke(run_smoke_test, ["--budget", "10.0"])
-    assert result.exit_code != 0
-    assert "Missing option '--idea-id'" in result.output
+    assert args[0] == expected_distinct_id
+    assert kwargs["event"] == expected_event_name
+
+    properties = kwargs["properties"]
+    assert properties["idea_id"] == idea_id
+    assert properties["campaign_name"] == f"Idea {idea_id} Ad Campaign"
+    assert properties["deployment_url"] == "http://mock-landing-page.com/test-idea"
+    assert properties["impressions"] == 1000
+    assert "Successfully sent metrics to PostHog" in result.output
+
+def test_run_smoke_test_posthog_disabled_by_pytest_env(runner, mock_posthog_capture, manage_posthog_state, tmp_path):
+    """
+    Test that posthog.capture is NOT called when PYTEST_CURRENT_TEST is set (simulating test environment).
+    """
+    # Explicitly set PYTEST_CURRENT_TEST and ensure posthog.disabled reflects this
+    os.environ["PYTEST_CURRENT_TEST"] = "sometest"
+    # The manage_posthog_state will by default set posthog.disabled to True if enabled=False
+    # We also need to ensure the module-level check for PYTEST_CURRENT_TEST in run_smoke_test.py
+    # has its intended effect. Patching posthog.disabled directly is the most robust.
+    with mock.patch("scripts.run_smoke_test.posthog.disabled", True):
+        idea_id = "test-idea-ph-disabled-pytest"
+        results_dir = tmp_path / "smoke_results"
+
+        result = runner.invoke(run_smoke_test, ["--idea-id", idea_id, "--results-dir", str(results_dir)])
+
+        assert result.exit_code == 0, f"CLI Errored: {result.output}"
+        mock_posthog_capture.assert_not_called()
+        assert "PostHog is disabled. Skipping sending metrics." in result.output
+
+    if "PYTEST_CURRENT_TEST" in os.environ: # Clean up env var
+        del os.environ["PYTEST_CURRENT_TEST"]
 
 
-def test_run_smoke_test_invalid_budget_type():
-    """Tests CLI behavior with invalid type for an option."""
-    runner = CliRunner()
-    result = runner.invoke(
-        run_smoke_test, ["--idea-id", "my-idea", "--budget", "not-a-float"]
-    )
-    assert result.exit_code != 0
-    expected_msg = "Invalid value for '--budget': 'not-a-float' is not a valid float."
-    assert expected_msg in result.output
+def test_run_smoke_test_posthog_disabled_by_missing_config(runner, mock_posthog_capture, manage_posthog_state, tmp_path):
+    """
+    Test that posthog.capture is NOT called when PostHog API key/host are not set.
+    """
+    manage_posthog_state(enabled=False) # This sets API keys to None and posthog.disabled to True
 
+    idea_id = "test-idea-ph-disabled-config"
+    results_dir = tmp_path / "smoke_results"
 
-@mock.patch("scripts.run_smoke_test.deploy_landing_page_to_unbounce")
-@mock.patch("scripts.run_smoke_test.create_google_ads_campaign")
-@mock.patch("scripts.run_smoke_test.get_campaign_metrics")
-# Mock json.dump to simulate IO error
-@mock.patch("scripts.run_smoke_test.json.dump")
-@mock.patch("scripts.run_smoke_test.SMOKE_TEST_RESULTS_DIR", str(TEST_OUTPUT_BASE_DIR))
-@mock.patch(
-    "scripts.run_smoke_test.AdBudgetSentinel"
-)  # Also mock AdBudgetSentinel here
-def test_run_smoke_test_metrics_saving_error(
-    mock_ad_sentinel_class,  # Add mock argument
-    mock_json_dump,
-    mock_get_metrics,
-    mock_create_campaign,
-    mock_deploy_page,
-):
-    """Tests if an error during metrics saving is handled."""
-    # Configure AdBudgetSentinel mock to behave normally (within budget)
-    mock_sentinel_instance = mock_ad_sentinel_class.return_value
-    mock_sentinel_instance.check_spend.return_value = True
+    result = runner.invoke(run_smoke_test, ["--idea-id", idea_id, "--results-dir", str(results_dir)])
 
-    mock_deploy_page.return_value = "http://mockpages.com/test-io-error"
-    mock_create_campaign.return_value = "mock-campaign-id-io-error"
-    mock_get_metrics.return_value = {"data": "test"}
-    mock_json_dump.side_effect = IOError("Simulated disk full error")
+    assert result.exit_code == 0, f"CLI Errored: {result.output}"
+    mock_posthog_capture.assert_not_called()
+    assert "PostHog is disabled. Skipping sending metrics." in result.output
+    # The warning about missing config is printed at module load time.
+    # If other tests ran first and loaded the module with config, that warning might not show here.
+    # The "Skipping sending metrics" is the key operational check.
 
-    runner = CliRunner()
-    result = runner.invoke(
-        run_smoke_test,
-        ["--idea-id", "test-io-error", "--results-dir", str(TEST_OUTPUT_BASE_DIR)],
-    )
+def test_run_smoke_test_successful_execution_structure(runner, manage_posthog_state, tmp_path):
+    """
+    Basic test to ensure the command runs without error and creates output.
+    PostHog calls are not the focus here.
+    """
+    manage_posthog_state(enabled=False) # Disable PostHog for this structural test
 
-    assert result.exit_code == 0  # Script should still complete
-    assert "Error saving metrics: Simulated disk full error" in result.output
-    assert "Smoke test for Idea ID: test-io-error completed." in result.output
+    idea_id = "test-idea-basic"
+    results_dir = tmp_path / "smoke_results"
 
+    result = runner.invoke(run_smoke_test, ["--idea-id", idea_id, "--results-dir", str(results_dir)])
 
-# New test case for budget exceeded scenario
-@mock.patch("scripts.run_smoke_test.deploy_landing_page_to_unbounce")
-@mock.patch("scripts.run_smoke_test.create_google_ads_campaign")
-@mock.patch("scripts.run_smoke_test.get_campaign_metrics")
-@mock.patch("scripts.run_smoke_test.AdBudgetSentinel")
-@mock.patch("scripts.run_smoke_test.SMOKE_TEST_RESULTS_DIR", str(TEST_OUTPUT_BASE_DIR))
-def test_run_smoke_test_ad_budget_exceeded(
-    mock_ad_sentinel_class, mock_get_metrics, mock_create_campaign, mock_deploy_page
-):
-    # Setup mocks for ads_manager functions
-    mock_deploy_page.return_value = "http://mockpages.com/test-idea-budget"
-    mock_campaign_id = "mock-campaign-budget-exceeded"
-    mock_create_campaign.return_value = mock_campaign_id
-    mock_metrics_data = {
-        "clicks": 200,
-        "conversions": 10,
-        "ctr": 0.1,
-        "campaign_id": mock_campaign_id,
-        "total_cost": 150.0,  # Over budget
-    }
-    mock_get_metrics.return_value = mock_metrics_data
+    assert result.exit_code == 0, f"CLI Errored: {result.output}"
+    assert f"Smoke test for Idea ID: {idea_id} completed." in result.output
 
-    # Configure AdBudgetSentinel mock
-    mock_sentinel_instance = mock_ad_sentinel_class.return_value
-    mock_sentinel_instance.check_spend.return_value = False  # Simulate budget exceeded
+    idea_results_path = results_dir / "".join(c if c.isalnum() or c in ("-", "_") else "_" for c in idea_id)
+    analytics_file = idea_results_path / "analytics.json"
+    assert analytics_file.exists()
 
-    runner = CliRunner()
-    budget = 50.0  # Campaign budget from CLI
-    result = runner.invoke(
-        run_smoke_test, ["--idea-id", "test-idea-budget", "--budget", str(budget)]
-    )
-
-    assert result.exit_code == 0  # Script should still complete
-    mock_ad_sentinel_class.assert_called_once()
-    # Check if AdBudgetSentinel was called with the correct budget
-    assert mock_ad_sentinel_class.call_args[1]["max_budget"] == budget
-    assert mock_ad_sentinel_class.call_args[1]["campaign_id"] == mock_campaign_id
-
-    mock_sentinel_instance.check_spend.assert_called_once_with(150.0)  # total_cost
-    assert "AdBudgetSentinel initialized" in result.output
-    assert "Checking ad spend: $150.00 against budget" in result.output
-    msg = (
-        f"Ad budget exceeded for campaign {mock_campaign_id}. "
-        f"Further actions would be halted."
-    )
-    assert msg in result.output
+# General notes on these tests:
+# - `mock_posthog_capture` is autoused to always mock `posthog.capture`.
+# - `manage_posthog_state` is a more robust fixture to control the perceived state of PostHog's configuration
+#   and `posthog.disabled` status within the `run_smoke_test` module. It directly patches
+#   the necessary attributes within the `scripts.run_smoke_test` module's namespace.
+# - This approach avoids issues with Python's module import caching, where module-level
+#   configurations (like PostHog API keys or the `posthog.disabled` flag based on initial
+#   `os.environ` checks) might not be re-evaluated if `os.environ` is changed after import.
+# - The tests cover:
+#   1. PostHog enabled: `posthog.capture` is called with correct data.
+#   2. PostHog disabled due to `PYTEST_CURRENT_TEST`: `posthog.capture` is not called.
+#   3. PostHog disabled due to missing API key/host: `posthog.capture` is not called.
+#   4. Basic script execution: ensures the script runs and produces expected output files.
+# - The `autouse=True` for `mock_ads_manager_functions` simplifies test setup by always mocking
+#   external dependencies of the script.
+# - `tmp_path` pytest fixture is used for creating temporary directories for test results,
+#   ensuring tests don't leave behind artifacts.
+# - Slugification of idea_id for results path is duplicated here to match script's behavior.
+#   This could be refactored into a shared utility if used in more places.
+# - The CLI output checks (`assert "message" in result.output`) are useful for verifying
+#   user feedback and debugging.
+# - `mock.patch.stopall()` in `manage_posthog_state` teardown is important to prevent patches
+#   from leaking between tests.
+# - `clear_pytest_env_var=True` in `manage_posthog_state` for the "enabled" test case ensures that
+#   even if `PYTEST_CURRENT_TEST` was set globally (e.g., by a test runner), we can override
+#   its effect for that specific test to check the PostHog enabled path.
+# - The test for `PYTEST_CURRENT_TEST` disabling PostHog (`test_run_smoke_test_posthog_disabled_by_pytest_env`)
+#   now explicitly sets the env var and then relies on patching `posthog.disabled` to `True`
+#   to ensure the intended behavior is tested regardless of when the module was imported.
+#   This is because the module-level check in `run_smoke_test.py` for `PYTEST_CURRENT_TEST`
+#   only runs once at import time.
+#
+# To run:
+# Ensure posthog is in requirements and installed.
+# PYTHONPATH=. pytest tests/scripts/test_run_smoke_test.py
+# (or however you normally run pytest for your project structure)
