@@ -134,8 +134,7 @@ if __name__ == "__main__":
     # 2. Add a new idea
     print("\n1. Adding new idea...")
     new_idea_data = IdeaCreate(
-        name="Eco-Friendly Drone Delivery",
-        description="A service using solar-powered drones for last-mile delivery.",
+        arxiv="https://arxiv.org/abs/2024.11001",
         evidence=[
             "https://example.com/drone_market_report.pdf",
             "https://example.com/solar_efficiency.txt",
@@ -144,13 +143,13 @@ if __name__ == "__main__":
     )
     try:
         created_idea = add_idea(new_idea_data)
-        print(f"Added Idea: {created_idea.name} (ID: {created_idea.id})")
+        print(f"Added Idea: {created_idea.arxiv} (ID: {created_idea.id})")
 
         # 3. Get the idea by ID
         print(f"\n2. Fetching idea by ID: {created_idea.id}")
         fetched_idea = get_idea_by_id(created_idea.id)
         if fetched_idea:
-            print(f"Fetched Idea: {fetched_idea.name}, Status: {fetched_idea.status}")
+            print(f"Fetched Idea: {fetched_idea.arxiv}, Status: {fetched_idea.status}")
             print(f"Evidence: {fetched_idea.evidence}")
         else:
             print(f"Idea with ID {created_idea.id} not found after adding.")
@@ -161,7 +160,7 @@ if __name__ == "__main__":
         if all_ideas:
             for idx, idea_item in enumerate(all_ideas):
                 print(
-                    f"  {idx + 1}. {idea_item.name} (ID: {idea_item.id}, "
+                    f"  {idx + 1}. {idea_item.arxiv} (ID: {idea_item.id}, "
                     f"Status: {idea_item.status})"
                 )
         else:
@@ -169,11 +168,10 @@ if __name__ == "__main__":
 
         # Add another idea for variety
         another_idea_data = IdeaCreate(
-            name="AI Language Tutor",
-            description="Personalized language learning with AI.",
+            arxiv="https://arxiv.org/abs/2024.11002",
         )
         another_idea = add_idea(another_idea_data)
-        print(f"\nAdded another idea: {another_idea.name} (ID: {another_idea.id})")
+        print(f"\nAdded another idea: {another_idea.arxiv} (ID: {another_idea.id})")
 
         # 5. Update an idea
         print(f"\n4. Updating idea: {created_idea.id}")

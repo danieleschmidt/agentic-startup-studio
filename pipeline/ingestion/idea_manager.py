@@ -18,6 +18,10 @@ from pipeline.models.idea import (
 from pipeline.config.settings import get_validation_config, ValidationConfig
 from pipeline.ingestion.validators import IdeaValidator, create_validator
 from pipeline.storage.idea_repository import IdeaRepository, create_idea_repository
+from pipeline.ingestion.duplicate_detector import CacheableDuplicateDetector
+from pipeline.ingestion.cache.cache_manager import CacheManager
+from pipeline.ingestion.monitoring.metrics_collector import MetricsCollector
+from pipeline.ingestion.monitoring.performance_monitor import PerformanceMonitor
 
 logger = logging.getLogger(__name__)
 
@@ -40,179 +44,6 @@ class ValidationError(IdeaManagementError):
 class StorageError(IdeaManagementError):
     """Raised when storage operations fail."""
     pass
-
-
-class DuplicateDetector:
-    """Handles duplicate detection and similarity analysis."""
-    
-    def __init__(self, repository: IdeaRepository, config: ValidationConfig):
-        self.repository = repository
-        self.config = config
-    
-    async def check_for_duplicates(self, draft: IdeaDraft) -> DuplicateCheckResult:
-        """
-        Comprehensive duplicate detection using exact and similarity matching.
-        
-        Args:
-            draft: Idea draft to check for duplicates
-            
-        Returns:
-            DuplicateCheckResult with found matches and scores
-        """
-        try:
-            result = DuplicateCheckResult(found_similar=False)
-            
-            # Step 1: Check for exact title matches
-            exact_matches = await self.repository.find_by_title_exact(draft.title)
-            if exact_matches:
-                result.found_similar = True
-                result.exact_matches = exact_matches
-                logger.warning(
-                    f"Exact title matches found for idea: {draft.title}",
-                    extra={"title": draft.title, "matches": len(exact_matches)}
-                )
-                return result
-            
-            # Step 2: Vector similarity search using description
-            similar_ideas = await self.repository.find_similar_by_embedding(
-                description=draft.description,
-                threshold=self.config.similarity_threshold,
-                exclude_statuses=[IdeaStatus.ARCHIVED, IdeaStatus.REJECTED],
-                limit=10
-            )
-            
-            if similar_ideas:
-                result.found_similar = True
-                result.similar_ideas = [idea_id for idea_id, score in similar_ideas]
-                result.similarity_scores = {
-                    str(idea_id): score for idea_id, score in similar_ideas
-                }
-                
-                logger.info(
-                    f"Similar ideas found using vector search",
-                    extra={
-                        "title": draft.title,
-                        "similar_count": len(similar_ideas),
-                        "max_similarity": max([score for _, score in similar_ideas]) if similar_ideas else 0
-                    }
-                )
-            
-            # Step 3: Fuzzy title matching as additional check
-            await self._add_fuzzy_title_matches(draft, result)
-            
-            return result
-            
-        except Exception as e:
-            logger.error(f"Duplicate detection failed: {e}")
-            # Return empty result on error to allow processing to continue
-            return DuplicateCheckResult(found_similar=False)
-    
-    async def _add_fuzzy_title_matches(self, draft: IdeaDraft, result: DuplicateCheckResult) -> None:
-        """Add fuzzy title matching results to duplicate check."""
-        try:
-            # Normalize and tokenize draft title
-            draft_words = self._normalize_title_words(draft.title)
-            
-            if len(draft_words) < 2:
-                return  # Skip fuzzy matching for very short titles
-            
-            # Get recent ideas for fuzzy comparison
-            recent_params = QueryParams(
-                limit=100,
-                sort_by="created_at",
-                sort_desc=True
-            )
-            recent_ideas = await self.repository.find_with_filters(recent_params)
-            
-            fuzzy_matches = []
-            for idea in recent_ideas:
-                if str(idea.idea_id) in [str(uid) for uid in result.exact_matches]:
-                    continue  # Skip exact matches
-                
-                idea_words = self._normalize_title_words(idea.title)
-                if len(idea_words) < 2:
-                    continue
-                
-                # Calculate improved word overlap ratio with partial matching
-                similarity_score = self._calculate_word_similarity(draft_words, idea_words)
-                
-                if similarity_score >= self.config.title_fuzzy_threshold:
-                    fuzzy_matches.append((idea.idea_id, similarity_score))
-            
-            # Add fuzzy matches to result
-            if fuzzy_matches:
-                fuzzy_matches.sort(key=lambda x: x[1], reverse=True)
-                for idea_id, score in fuzzy_matches[:5]:  # Top 5 fuzzy matches
-                    if str(idea_id) not in result.similarity_scores:
-                        result.similar_ideas.append(idea_id)
-                        result.similarity_scores[str(idea_id)] = score
-                        result.found_similar = True
-                
-                logger.debug(
-                    f"Added {len(fuzzy_matches)} fuzzy title matches",
-                    extra={
-                        "draft_title": draft.title,
-                        "matches": [(str(mid), score) for mid, score in fuzzy_matches]
-                    }
-                )
-                
-        except Exception as e:
-            logger.warning(f"Fuzzy title matching failed: {e}")
-    
-    def _normalize_title_words(self, title: str) -> set:
-        """Normalize title into comparable word tokens."""
-        # Convert to lowercase and split on various separators
-        import re
-        # Split on spaces, hyphens, underscores, and other common separators
-        words = re.split(r'[\s\-_]+', title.lower())
-        
-        # Filter out empty strings and very short words
-        normalized_words = set()
-        for word in words:
-            cleaned = re.sub(r'[^\w]', '', word)  # Remove punctuation
-            if len(cleaned) >= 2:  # Only keep words with 2+ characters
-                normalized_words.add(cleaned)
-        
-        return normalized_words
-    
-    def _calculate_word_similarity(self, words1: set, words2: set) -> float:
-        """Calculate similarity between two sets of words using Jaccard coefficient."""
-        if not words1 or not words2:
-            return 0.0
-        
-        # Calculate Jaccard coefficient: intersection / union
-        intersection = len(words1.intersection(words2))
-        union = len(words1.union(words2))
-        
-        if union == 0:
-            return 0.0
-        
-        jaccard_score = intersection / union
-        
-        # Boost score for partial word matches (e.g., "ai" matches "artificial")
-        partial_match_score = 0.0
-        for word1 in words1:
-            for word2 in words2:
-                if word1 != word2:  # Don't double-count exact matches
-                    # Check if one word is a substring of another (min 3 chars)
-                    if len(word1) >= 3 and len(word2) >= 3:
-                        if word1 in word2 or word2 in word1:
-                            partial_match_score += 0.1  # Small boost for partial matches
-        
-        # Combine Jaccard and partial match score, capping at 1.0
-        combined_score = min(1.0, jaccard_score + partial_match_score)
-        
-        logger.debug(
-            f"Calculated similarity: Jaccard={jaccard_score:.2f}, Partial={partial_match_score:.2f}, Combined={combined_score:.2f}",
-            extra={"words1": list(words1), "words2": list(words2)}
-        )
-        
-        return combined_score
-        
-        # Normalize partial matches and add to Jaccard score
-        partial_score = partial_matches / max(len(words1), len(words2))
-        
-        return min(1.0, jaccard_score + partial_score)
 
 
 class IdeaLifecycleManager:
@@ -341,18 +172,36 @@ class IdeaLifecycleManager:
 
 
 class IdeaManager:
-    """Main idea management orchestrator."""
+    """Main idea management orchestrator with integrated caching and monitoring."""
     
     def __init__(
-        self, 
-        repository: IdeaRepository, 
+        self,
+        repository: IdeaRepository,
         validator: IdeaValidator,
-        config: ValidationConfig
+        config: ValidationConfig,
+        cache_manager: Optional[CacheManager] = None,
+        metrics_collector: Optional[MetricsCollector] = None,
+        performance_monitor: Optional[PerformanceMonitor] = None
     ):
         self.repository = repository
         self.validator = validator
         self.config = config
-        self.duplicate_detector = DuplicateDetector(repository, config)
+        
+        # Initialize monitoring components
+        self.cache_manager = cache_manager or CacheManager()
+        self.metrics_collector = metrics_collector or MetricsCollector()
+        self.performance_monitor = performance_monitor or PerformanceMonitor(
+            metrics_collector=self.metrics_collector,
+            cache_hit_rate_threshold=0.8
+        )
+        
+        # Initialize optimized duplicate detector with caching and monitoring
+        self.duplicate_detector = CacheableDuplicateDetector(
+            repository=repository,
+            cache_manager=self.cache_manager,
+            metrics_collector=self.metrics_collector,
+            config=config
+        )
         self.lifecycle_manager = IdeaLifecycleManager(repository)
     
     async def create_idea(

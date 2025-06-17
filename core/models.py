@@ -14,18 +14,17 @@ class Idea(SQLModel, table=True):
     """
     Represents a startup idea and its associated metadata.
     This model is used for database interaction (table structure) and API responses.
+    Aligned with Milestone 1 requirements: arxiv, evidence, deck_path, status fields.
     """
 
     # SQLModel handles primary_key, default_factory for UUID correctly
     id: Optional[UUID] = Field(
         default_factory=uuid4, primary_key=True, index=True, nullable=False
     )
-    name: str = Field(index=True, description="The name or title of the idea")
-    description: str = Field(description="A detailed description of the idea")
-    # For list[str], SQLModel might need JSON or a custom type for some DBs,
-    # but PostgreSQL with SQLModel can often handle list[str] via ARRAY type
-    # if the dialect supports it.
-    # Store list of strings as JSON in the database
+    arxiv: str = Field(
+        index=True,
+        description="Academic paper reference or research citation for the idea"
+    )
     evidence: List[str] = Field(
         default_factory=list,
         sa_column=Column(JSON),  # Specify JSON column type for SQLAlchemy
@@ -48,11 +47,7 @@ class Idea(SQLModel, table=True):
         json_schema_extra={
             "example": {
                 "id": "123e4567-e89b-12d3-a456-426614174000",
-                "name": "AI-Powered Personal Chef",
-                "description": (
-                    "A service that uses AI to plan meals, generate shopping "
-                    "lists, and guide users through cooking."
-                ),
+                "arxiv": "https://arxiv.org/abs/2024.10123",
                 "evidence": [
                     "https://example.com/market_research_report.pdf",
                     "https://example.com/competitor_analysis.docx",
@@ -69,8 +64,7 @@ class Idea(SQLModel, table=True):
 
 # Pydantic model for creating an Idea (input)
 class IdeaCreate(SQLModel):  # Inherits from SQLModel for consistency, not a table model
-    name: str
-    description: str
+    arxiv: str
     evidence: List[str] = Field(default_factory=list)
     deck_path: Optional[str] = None
     status: str = "ideation"
@@ -78,10 +72,7 @@ class IdeaCreate(SQLModel):  # Inherits from SQLModel for consistency, not a tab
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "name": "Sustainable Packaging Solution",
-                "description": (
-                    "Developing biodegradable packaging from agricultural waste."
-                ),
+                "arxiv": "https://arxiv.org/abs/2024.12345",
                 "evidence": ["https://example.com/initial_research.pdf"],
                 "deck_path": "drafts/packaging_deck_v0.1.marp",
                 "status": "ideation",
@@ -92,8 +83,7 @@ class IdeaCreate(SQLModel):  # Inherits from SQLModel for consistency, not a tab
 
 # Pydantic model for updating an Idea (input, all fields optional)
 class IdeaUpdate(SQLModel):  # Inherits from SQLModel for consistency, not a table model
-    name: Optional[str] = None
-    description: Optional[str] = None
+    arxiv: Optional[str] = None
     evidence: Optional[List[str]] = None
     deck_path: Optional[str] = None
     status: Optional[str] = None
@@ -101,7 +91,7 @@ class IdeaUpdate(SQLModel):  # Inherits from SQLModel for consistency, not a tab
     model_config = ConfigDict(
         json_schema_extra={
             "example": {
-                "name": "AI-Powered Meal Planner (Revised)",
+                "arxiv": "https://arxiv.org/abs/2024.54321",
                 "status": "research",
                 "evidence": ["https://example.com/new_market_data.pdf"],
             }

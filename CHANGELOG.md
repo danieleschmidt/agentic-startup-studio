@@ -8,6 +8,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+#### Milestone 1: Core Data Structures (December 2024)
+- **Updated Idea Model Structure**: Migrated from `name`/`description` fields to `arxiv`-based structure for Milestone 1 requirements
+- **Field Alignment**: Updated all data models to use consistent field names:
+  - `arxiv: str` - Academic paper reference URL for research-backed ideas
+  - `evidence: List[str]` - List of evidence URLs and supporting documentation
+  - `deck_path: Optional[str]` - Path to generated pitch deck files
+  - `status: str` - Current idea status (research/testing/funded/etc.)
+- **Model Consistency**: Aligned `Idea`, `IdeaCreate`, and `IdeaUpdate` models with new field structure
+- **Example Code Updates**: Updated demonstration code in `core/idea_ledger.py` to use new field structure
+- **Database Schema Migration**: Updated SQLModel table definitions for new field structure
+- **Type Safety**: Maintained comprehensive type hints and Pydantic validation throughout model updates
 
 #### Pipeline Implementation
 - **Comprehensive Data Pipeline**: Implemented multi-stage pipeline with idea ingestion, processing, storage, and services

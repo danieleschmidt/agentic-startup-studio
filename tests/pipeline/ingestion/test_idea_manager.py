@@ -13,10 +13,13 @@ from datetime import datetime, timezone
 from typing import List, Tuple, Dict, Any, Optional
 
 from pipeline.ingestion.idea_manager import (
-    DuplicateDetector, IdeaLifecycleManager, IdeaManager,
+    IdeaLifecycleManager, IdeaManager,
     IdeaManagementError, DuplicateIdeaError, ValidationError, StorageError,
     create_idea_manager
 )
+from pipeline.ingestion.duplicate_detector import CacheableDuplicateDetector
+from pipeline.ingestion.cache.cache_manager import CacheManager
+from pipeline.ingestion.monitoring.metrics_collector import MetricsCollector
 from pipeline.models.idea import (
     Idea, IdeaDraft, IdeaStatus, PipelineStage, IdeaCategory,
     QueryParams, ValidationResult, DuplicateCheckResult, IdeaSummary
@@ -43,9 +46,19 @@ class TestDuplicateDetector:
         return Mock(spec=IdeaRepository)
     
     @pytest.fixture
-    def detector(self, mock_repository, config) -> DuplicateDetector:
-        """Provide DuplicateDetector with mocked dependencies."""
-        return DuplicateDetector(mock_repository, config)
+    def mock_cache_manager(self):
+        """Provide mock cache manager."""
+        return Mock(spec=CacheManager)
+    
+    @pytest.fixture
+    def mock_metrics_collector(self):
+        """Provide mock metrics collector."""
+        return Mock(spec=MetricsCollector)
+    
+    @pytest.fixture
+    def detector(self, mock_repository, mock_cache_manager, mock_metrics_collector, config) -> CacheableDuplicateDetector:
+        """Provide CacheableDuplicateDetector with mocked dependencies."""
+        return CacheableDuplicateDetector(mock_repository, mock_cache_manager, mock_metrics_collector, config)
     
     @pytest.fixture
     def sample_draft(self) -> IdeaDraft:
@@ -189,8 +202,8 @@ class TestIdeaLifecycleManager:
         """Provide sample idea in IDEATE stage."""
         return Idea(
             idea_id=uuid4(),
-            title="Test idea",
-            description="Test description",
+            title="Test idea for lifecycle management",
+            description="Test description for lifecycle management testing",
             status=IdeaStatus.DRAFT,
             current_stage=PipelineStage.IDEATE
         )
@@ -317,7 +330,7 @@ class TestIdeaManager:
     @pytest.fixture
     def mock_duplicate_detector(self):
         """Provide mock duplicate detector."""
-        return Mock(spec=DuplicateDetector)
+        return Mock(spec=CacheableDuplicateDetector)
     
     @pytest.fixture
     def mock_lifecycle_manager(self):
@@ -565,17 +578,27 @@ class TestIdeaManagerIntegrationScenarios:
         config = ValidationConfig()
         mock_repository = Mock(spec=IdeaRepository)
         mock_validator = Mock(spec=IdeaValidator)
+        mock_cache_manager = Mock(spec=CacheManager)
+        mock_metrics_collector = Mock(spec=MetricsCollector)
+        
+        # Configure cache manager to return None (cache miss) for duplicate check results
+        mock_cache_manager.get = AsyncMock(return_value=None)
+        mock_cache_manager.set = AsyncMock()
+        
+        # Configure metrics collector
+        mock_metrics_collector.record_timing = Mock()
+        mock_metrics_collector.increment_counter = Mock()
         
         manager = IdeaManager(mock_repository, mock_validator, config)
         # Use real sub-components for integration testing
-        manager.duplicate_detector = DuplicateDetector(mock_repository, config)
+        manager.duplicate_detector = CacheableDuplicateDetector(mock_repository, mock_cache_manager, mock_metrics_collector, config)
         manager.lifecycle_manager = IdeaLifecycleManager(mock_repository)
-        return manager, mock_repository, mock_validator
+        return manager, mock_repository, mock_validator, mock_cache_manager, mock_metrics_collector
     
     @pytest.mark.asyncio
     async def test_when_complete_workflow_then_all_steps_executed(self, full_idea_manager):
         """Given complete workflow, when creating idea, then executes all steps in order."""
-        manager, mock_repository, mock_validator = full_idea_manager
+        manager, mock_repository, mock_validator, mock_cache_manager, mock_metrics_collector = full_idea_manager
         
         # Setup complex workflow
         sample_draft = IdeaDraft(

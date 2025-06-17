@@ -10,7 +10,7 @@ from functools import lru_cache
 from typing import Optional, List, Dict, Any, Union
 from pathlib import Path
 
-from pydantic import BaseModel, Field, validator, model_validator
+from pydantic import BaseModel, Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
 import logging
 
@@ -35,21 +35,24 @@ class DatabaseConfig(BaseSettings):
     vector_dimensions: int = Field(default=1536, env="VECTOR_DIMENSIONS")
     enable_vector_search: bool = Field(default=True, env="ENABLE_VECTOR_SEARCH")
     
-    @validator('port')
+    @field_validator('port')
+    @classmethod
     def validate_port(cls, v):
         """Validate database port is within valid range."""
         if not 1 <= v <= 65535:
             raise ValueError("Database port must be between 1 and 65535")
         return v
     
-    @validator('timeout')
+    @field_validator('timeout')
+    @classmethod
     def validate_timeout(cls, v):
         """Validate timeout is positive."""
         if v <= 0:
             raise ValueError("Database timeout must be positive")
         return v
     
-    @validator('vector_dimensions')
+    @field_validator('vector_dimensions')
+    @classmethod
     def validate_vector_dimensions(cls, v):
         """Validate vector dimensions are reasonable."""
         if not 100 <= v <= 4096:
@@ -101,14 +104,16 @@ class ValidationConfig(BaseSettings):
     max_ideas_per_hour: int = Field(default=10, env="MAX_IDEAS_PER_HOUR")
     max_ideas_per_day: int = Field(default=50, env="MAX_IDEAS_PER_DAY")
     
-    @validator('min_title_length', 'min_description_length')
+    @field_validator('min_title_length', 'min_description_length')
+    @classmethod
     def validate_min_lengths(cls, v):
         """Validate minimum lengths are positive."""
         if v <= 0:
             raise ValueError("Minimum length must be positive")
         return v
     
-    @validator('similarity_threshold', 'title_fuzzy_threshold')
+    @field_validator('similarity_threshold', 'title_fuzzy_threshold')
+    @classmethod
     def validate_thresholds(cls, v):
         """Validate thresholds are between 0 and 1."""
         if not 0.0 <= v <= 1.0:
@@ -150,7 +155,8 @@ class EmbeddingConfig(BaseSettings):
     retry_attempts: int = Field(default=3, env="EMBEDDING_RETRY_ATTEMPTS")
     retry_delay: float = Field(default=1.0, env="EMBEDDING_RETRY_DELAY")
     
-    @validator('provider')
+    @field_validator('provider')
+    @classmethod
     def validate_provider(cls, v):
         """Validate embedding provider is supported."""
         supported_providers = ['openai', 'huggingface', 'sentence-transformers']
@@ -158,14 +164,16 @@ class EmbeddingConfig(BaseSettings):
             raise ValueError(f"Provider must be one of: {supported_providers}")
         return v.lower()
     
-    @validator('cache_ttl', 'cache_size', 'batch_size', 'retry_attempts')
+    @field_validator('cache_ttl', 'cache_size', 'batch_size', 'retry_attempts')
+    @classmethod
     def validate_positive_integers(cls, v):
         """Validate positive integer fields."""
         if v <= 0:
             raise ValueError("Value must be positive")
         return v
     
-    @validator('retry_delay')
+    @field_validator('retry_delay')
+    @classmethod
     def validate_retry_delay(cls, v):
         """Validate retry delay is reasonable."""
         if not 0.1 <= v <= 60.0:
@@ -197,7 +205,8 @@ class LoggingConfig(BaseSettings):
     enable_metrics: bool = Field(default=True, env="ENABLE_METRICS")
     metrics_prefix: str = Field(default="idea_ingestion", env="METRICS_PREFIX")
     
-    @validator('log_level', 'database_log_level')
+    @field_validator('log_level', 'database_log_level')
+    @classmethod
     def validate_log_level(cls, v):
         """Validate log level is supported."""
         valid_levels = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
@@ -235,14 +244,16 @@ class BudgetConfig(BaseSettings):
     # Monitoring intervals
     budget_check_interval: int = Field(default=60, env="BUDGET_CHECK_INTERVAL")  # seconds
     
-    @validator('total_cycle_budget', 'openai_budget', 'google_ads_budget', 'infrastructure_budget')
+    @field_validator('total_cycle_budget', 'openai_budget', 'google_ads_budget', 'infrastructure_budget')
+    @classmethod
     def validate_positive_budgets(cls, v):
         """Validate budget amounts are positive."""
         if v <= 0:
             raise ValueError("Budget amounts must be positive")
         return v
     
-    @validator('warning_threshold', 'critical_threshold', 'emergency_threshold')
+    @field_validator('warning_threshold', 'critical_threshold', 'emergency_threshold')
+    @classmethod
     def validate_thresholds(cls, v):
         """Validate thresholds are between 0 and 1."""
         if not 0.0 <= v <= 1.0:
@@ -272,7 +283,8 @@ class BudgetConfig(BaseSettings):
         
         return self
     
-    @validator('budget_check_interval')
+    @field_validator('budget_check_interval')
+    @classmethod
     def validate_check_interval(cls, v):
         """Validate budget check interval is reasonable."""
         if not 10 <= v <= 3600:  # 10 seconds to 1 hour
@@ -310,7 +322,8 @@ class IngestionConfig(BaseSettings):
         default_factory=lambda: ["localhost", "127.0.0.1"]
     )
     
-    @validator('environment')
+    @field_validator('environment')
+    @classmethod
     def validate_environment(cls, v):
         """Validate environment is supported."""
         valid_envs = ['development', 'testing', 'staging', 'production']
@@ -318,15 +331,18 @@ class IngestionConfig(BaseSettings):
             raise ValueError(f"Environment must be one of: {valid_envs}")
         return v.lower()
     
-    @validator('secret_key')
-    def validate_secret_key(cls, v, values):
+    @field_validator('secret_key')
+    @classmethod
+    def validate_secret_key(cls, v, info):
         """Validate secret key is set for production."""
-        environment = values.get('environment', 'development')
+        # Access other field values through info.data
+        environment = info.data.get('environment', 'development') if info.data else 'development'
         if environment == 'production' and not v:
             raise ValueError("SECRET_KEY is required for production environment")
         return v
     
-    @validator('allowed_origins', pre=True)
+    @field_validator('allowed_origins', mode='before')
+    @classmethod
     def parse_allowed_origins(cls, v):
         """Parse allowed origins from string or list."""
         # Handle environment variable directly to prevent JSON parsing
