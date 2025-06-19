@@ -96,7 +96,10 @@ flowchart TD
 git clone https://github.com/your-org/agentic-startup-studio.git
 cd agentic-startup-studio
 
-# Install dependencies
+# Install dependencies using UV (recommended)
+python uv-setup.py
+
+# Or install with pip
 pip install -r requirements.txt
 
 # Set up environment variables (copy and edit)
@@ -105,6 +108,28 @@ cp .env.example .env
 # Run tests to verify setup
 pytest
 ```
+
+#### UV Environment Setup
+
+The project includes an enhanced UV setup script for fast, reliable environment management:
+
+```bash
+# Standard setup
+python uv-setup.py
+
+# Debug mode with detailed logging
+python uv-setup.py --debug
+
+# Or use environment variable
+UV_SETUP_DEBUG=true python uv-setup.py
+```
+
+**Features:**
+- **Comprehensive Logging**: Timestamped log files in `logs/` directory for troubleshooting
+- **Performance Timing**: Detailed timing measurements for all setup operations
+- **Cross-Platform**: Windows-compatible with proper UTF-8 encoding
+- **Debug Mode**: Verbose logging via `--debug` flag or `UV_SETUP_DEBUG=true`
+- **Error Handling**: Enhanced error context with recovery suggestions
 
 ### Basic Usage
 

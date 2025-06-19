@@ -8,6 +8,19 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+
+#### Development Tools & Environment Management (June 2025)
+- **UV Setup Script Logging Enhancement**: Comprehensive logging infrastructure for UV-based environment setup
+  - **File Logging**: Automatic creation of timestamped log files in `logs/` directory with UTF-8 encoding
+  - **Debug Mode Support**: Command-line (`--debug`) and environment variable (`UV_SETUP_DEBUG=true`) debug activation
+  - **Performance Timing**: Detailed timing measurements for all setup operations and individual steps
+  - **Command Execution Logging**: Complete STDOUT/STDERR capture with execution duration tracking
+  - **Cross-Platform Compatibility**: Windows-compatible logging with proper file handling
+  - **Enhanced Error Handling**: Comprehensive exception handling with detailed logging context
+  - **Setup Summary Reporting**: Final completion summary with timing information and log file references
+  - **Troubleshooting Support**: Log file location guidance and debug mode instructions
+
+### Added
 #### Milestone 1: Core Data Structures (December 2024)
 - **Updated Idea Model Structure**: Migrated from `name`/`description` fields to `arxiv`-based structure for Milestone 1 requirements
 - **Field Alignment**: Updated all data models to use consistent field names:

@@ -217,6 +217,51 @@ class LoggingConfig(BaseSettings):
     class Config:
         """Pydantic configuration."""
         env_prefix = ""
+class InfrastructureConfig(BaseSettings):
+    """Infrastructure and reliability configuration."""
+    
+    # Circuit breaker settings
+    circuit_breaker_failure_threshold: int = Field(default=5, env="CIRCUIT_BREAKER_FAILURE_THRESHOLD")
+    circuit_breaker_timeout_seconds: float = Field(default=30.0, env="CIRCUIT_BREAKER_TIMEOUT_SECONDS")
+    circuit_breaker_recovery_timeout: float = Field(default=60.0, env="CIRCUIT_BREAKER_RECOVERY_TIMEOUT")
+    circuit_breaker_success_threshold: int = Field(default=3, env="CIRCUIT_BREAKER_SUCCESS_THRESHOLD")
+    
+    # Quality gate settings
+    quality_gate_enabled: bool = Field(default=True, env="QUALITY_GATE_ENABLED")
+    quality_gate_timeout_seconds: float = Field(default=10.0, env="QUALITY_GATE_TIMEOUT_SECONDS")
+    
+    # Health monitoring settings
+    health_check_interval: int = Field(default=30, env="HEALTH_CHECK_INTERVAL")  # seconds
+    enable_health_monitoring: bool = Field(default=True, env="ENABLE_HEALTH_MONITORING")
+    
+    @field_validator('circuit_breaker_failure_threshold', 'circuit_breaker_success_threshold')
+    @classmethod
+    def validate_positive_thresholds(cls, v):
+        """Validate thresholds are positive integers."""
+        if v <= 0:
+            raise ValueError("Circuit breaker thresholds must be positive")
+        return v
+    
+    @field_validator('circuit_breaker_timeout_seconds', 'circuit_breaker_recovery_timeout', 'quality_gate_timeout_seconds')
+    @classmethod
+    def validate_positive_timeouts(cls, v):
+        """Validate timeouts are positive numbers."""
+        if v <= 0:
+            raise ValueError("Timeout values must be positive")
+        return v
+    
+    @field_validator('health_check_interval')
+    @classmethod
+    def validate_health_check_interval(cls, v):
+        """Validate health check interval is reasonable."""
+        if not 10 <= v <= 3600:  # 10 seconds to 1 hour
+            raise ValueError("Health check interval must be between 10 and 3600 seconds")
+        return v
+
+    class Config:
+        """Pydantic configuration."""
+        env_prefix = ""
+        case_sensitive = False
         case_sensitive = False
 
 
@@ -310,6 +355,7 @@ class IngestionConfig(BaseSettings):
     embedding: EmbeddingConfig = EmbeddingConfig()
     logging: LoggingConfig = LoggingConfig()
     budget: BudgetConfig = BudgetConfig()
+    infrastructure: InfrastructureConfig = InfrastructureConfig()
     
     # Application settings
     app_name: str = Field(default="agentic-startup-studio", env="APP_NAME")
@@ -497,3 +543,8 @@ def get_logging_config() -> LoggingConfig:
 def get_budget_config() -> BudgetConfig:
     """Get budget configuration."""
     return get_settings().budget
+
+
+def get_infrastructure_config() -> InfrastructureConfig:
+    """Get infrastructure configuration."""
+    return get_settings().infrastructure

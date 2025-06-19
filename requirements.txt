@@ -6,6 +6,7 @@ crewai>=0.23.2             # YAML-first agent runner :contentReference[oaicite
 # vector store & DB
 pgvector>=0.2.3
 psycopg[binary]            # Postgres driver
+psycopg2-binary>=2.9.5     # Required for setup script
 
 # LLM & tools
 openai>=1.26.0
