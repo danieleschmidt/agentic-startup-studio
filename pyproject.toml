@@ -68,6 +68,10 @@ dev = [
     "pre-commit>=3.6.0",
     "jupyter>=1.0.0",
     "ipython>=8.17.2",
+    "aiohttp>=3.12.0",
+    "aioresponses>=0.7.0",
+    "responses>=0.25.0",
+    "docker>=7.0.0",
 ]
 
 ai = [
