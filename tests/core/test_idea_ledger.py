@@ -1,14 +1,18 @@
-import pytest
-from uuid import uuid4, UUID
+import os
 from typing import Generator, List
-
-from sqlmodel import create_engine, Session, SQLModel, delete  # Import delete
 from unittest.mock import patch
+from uuid import UUID, uuid4
+
+import pytest
+from sqlmodel import Session, SQLModel, create_engine, delete  # Import delete
 
 # Import the models and ledger functions
 # We assume PYTHONPATH is set up correctly for tests to find the core module
 from core.models import Idea, IdeaCreate, IdeaUpdate
-from core import idea_ledger  # Import the module itself to patch its 'engine'
+
+# Ensure the ledger uses SQLite for testing before the module is imported
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+from core import idea_ledger  # Import after setting env var
 
 # Use an in-memory SQLite database for testing
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -84,6 +88,7 @@ def test_add_idea(session: Session):
 
 def test_get_idea_by_id(session: Session):
     """Test retrieving an idea by its ID."""
+
     idea_data = IdeaCreate(
         arxiv="https://arxiv.org/abs/2222.3333",
         evidence=[],
@@ -145,6 +150,7 @@ def test_list_ideas_with_items_and_pagination(session: Session):
 
 def test_update_idea(session: Session):
     """Test updating an existing idea."""
+
     idea_data = IdeaCreate(
         arxiv="https://arxiv.org/abs/update1",
         evidence=["http://example.com/init.pdf"],
