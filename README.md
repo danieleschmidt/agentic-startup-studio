@@ -107,6 +107,9 @@ cp .env.example .env
 
 # Run tests to verify setup
 pytest
+
+# Seed an example idea (optional)
+python scripts/seed_idea.py "HIPAA compliance checker SaaS"
 ```
 
 #### UV Environment Setup
@@ -148,6 +151,9 @@ python -m pipeline.cli.ingestion_cli get --id <idea-uuid>
 
 # Advance idea through pipeline stages
 python -m pipeline.cli.ingestion_cli advance --id <idea-uuid> --stage RESEARCH
+
+# Run the pitch loop simulation
+PYTHONPATH=. python scripts/run_pitch.py --tokens 1000 --threshold 0.8
 ```
 
 ---
