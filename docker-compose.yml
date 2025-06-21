@@ -1,61 +1,95 @@
+version: '3.9'
 services:
   # ───────────────────── core datastores ─────────────────────
   redis:
     image: redis:7-alpine
     restart: unless-stopped
-    ports: ["6379:6379"]
+    env_file: .env
+    ports:
+      - "6379:6379"
     volumes:
       - redis_data:/data          # durable task / event queues
+    deploy:
+      resources:
+        limits:
+          cpus: '0.25'
+          memory: 128m
 
   pgvector:
     image: pgvector/pgvector:pg16     # Postgres 16 + pgvector extension
     restart: unless-stopped
+    env_file: .env
     environment:
-      POSTGRES_DB: studio
-      POSTGRES_USER: studio
-      POSTGRES_PASSWORD: studio
-    ports: ["5432:5432"]
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
     volumes:
       - pgdata:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512m
 
   # ───────────────────── analytics (PostHog) ──────────────────
   posthog-clickhouse:
     image: clickhouse/clickhouse-server:23
     restart: unless-stopped
+    env_file: .env
     volumes:
       - chdata:/var/lib/clickhouse
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512m
 
   posthog:
     image: posthog/posthog:latest
     restart: unless-stopped
+    env_file: .env
     depends_on: [pgvector, redis, posthog-clickhouse]
-    ports: ["8000:8000"]
+    ports:
+      - "8000:8000"
     environment:
-      DATABASE_URL: postgres://studio:studio@pgvector:5432/studio
-      SECRET_KEY: changeme              # replace in production
+      DATABASE_URL: ${POSTHOG_DATABASE_URL}
+      SECRET_KEY: ${POSTHOG_SECRET_KEY}
       CLICKHOUSE_HOST: posthog-clickhouse
       REDIS_HOST: redis
       SITE_URL: http://localhost:8000
     volumes:
       - posthog_data:/var/lib/posthog
+    deploy:
+      resources:
+        limits:
+          cpus: '1.0'
+          memory: 1g
 
   # ───────────────────── customer engagement (Dittofeed) ─────
   dittofeed:
     image: ghcr.io/dittofeed/dittofeed:latest
     restart: unless-stopped
+    env_file: .env
     depends_on: [pgvector, redis, posthog]
-    ports: ["9000:8080"]               # 8080 inside → 9000 outside
+    ports:
+      - "9000:8080"               # 8080 inside → 9000 outside
     environment:
-      DATABASE_URL: postgres://studio:studio@pgvector:5432/studio
+      DATABASE_URL: ${DITTO_DATABASE_URL}
       REDIS_URL: redis://redis:6379
-      POSTHOG_API_KEY: "${POSTHOG_API_KEY}"      # set in .env
+      POSTHOG_API_KEY: "${POSTHOG_API_KEY}"
       POSTHOG_PROJECT_ID: "${POSTHOG_PROJECT_ID}"
     volumes:
       - dittofeed_data:/app/data
+    deploy:
+      resources:
+        limits:
+          cpus: '0.5'
+          memory: 512m
 
 volumes:
   redis_data:
-  postgres_data:
   pgdata:
   chdata:
   posthog_data:
