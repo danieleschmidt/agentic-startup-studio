@@ -158,6 +158,35 @@ class SyntheticDataGenerator:
             'timestamp': self.fake.date_time().isoformat()
         }
 
+    def generate_edge_case(self) -> Dict[str, Any]:
+        """Generate edge case startup idea data with boundary values."""
+        return {
+            'title': '',
+            'description': self.fake.text(max_nb_chars=1024),
+            'category': 'edge',
+            'tags': [],
+            'evidence': '',
+            'status': 'unknown',
+            'created_by': '',
+            'market_size': 0,
+            'target_audience': '',
+            'business_model': '',
+            'competition_level': 'n/a',
+            'implementation_complexity': 0
+        }
+
+    def generate_malicious_payload(self) -> Dict[str, Any]:
+        """Generate malicious payload for security testing."""
+        payloads = [
+            "'; DROP TABLE users; --",
+            "<script>alert('xss')</script>",
+            "../../../../../../etc/passwd"
+        ]
+        return {
+            'payload': self.fake.random_element(payloads),
+            'timestamp': self.fake.date_time().isoformat()
+        }
+
 
 class MockServiceManager:
     """Manages mock services for testing external dependencies."""
@@ -382,11 +411,15 @@ class DataManager:
                 data = [self.synthetic_generator.generate_user_data(anonymized) for _ in range(count)]
             elif schema == 'api_responses':
                 data = [
-                    self.synthetic_generator.generate_api_response(f"/api/test/{i}", 
+                    self.synthetic_generator.generate_api_response(f"/api/test/{i}",
                     success=i % 10 != 0) for i in range(count)
                 ]
             elif schema == 'performance_metrics':
                 data = [self.synthetic_generator.generate_performance_metrics() for _ in range(count)]
+            elif schema == 'edge_cases':
+                data = [self.synthetic_generator.generate_edge_case() for _ in range(count)]
+            elif schema == 'malicious_payloads':
+                data = [self.synthetic_generator.generate_malicious_payload() for _ in range(count)]
             else:
                 raise ValueError(f"Unknown schema type: {schema}")
             
@@ -566,6 +599,18 @@ def create_performance_test_data(count: int = 100) -> TestDataSet:
     """Factory function to create performance metrics test data."""
     manager = DataManager()
     return manager.generate_synthetic_data('performance_metrics', count)
+
+
+def create_edge_case_test_data(count: int = 20) -> TestDataSet:
+    """Factory to create edge case startup idea data."""
+    manager = DataManager()
+    return manager.generate_synthetic_data('edge_cases', count)
+
+
+def create_malicious_payload_data(count: int = 20) -> TestDataSet:
+    """Factory to create malicious payload test data."""
+    manager = DataManager()
+    return manager.generate_synthetic_data('malicious_payloads', count)
 
 
 async def create_mock_api_service(endpoints: List[Dict[str, Any]], port: int = 8080) -> MockServiceConfig:

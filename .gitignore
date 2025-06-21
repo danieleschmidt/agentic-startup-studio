@@ -206,3 +206,5 @@ docker-compose.override.yml
 
 # Generic log files
 *.log
+# Test data cache
+/tests/cache/
