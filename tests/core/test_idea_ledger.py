@@ -1,14 +1,18 @@
-import pytest
-from uuid import uuid4, UUID
+import os
 from typing import Generator, List
-
-from sqlmodel import create_engine, Session, SQLModel, delete  # Import delete
 from unittest.mock import patch
+from uuid import UUID, uuid4
+
+import pytest
+from sqlmodel import Session, SQLModel, create_engine, delete  # Import delete
 
 # Import the models and ledger functions
 # We assume PYTHONPATH is set up correctly for tests to find the core module
 from core.models import Idea, IdeaCreate, IdeaUpdate
-from core import idea_ledger  # Import the module itself to patch its 'engine'
+
+# Ensure the ledger uses SQLite for testing before the module is imported
+os.environ["DATABASE_URL"] = "sqlite:///:memory:"
+from core import idea_ledger  # Import after setting env var
 
 # Use an in-memory SQLite database for testing
 TEST_DATABASE_URL = "sqlite:///:memory:"
@@ -64,8 +68,7 @@ def test_create_db_and_tables(engine):  # Uses function-scoped engine
 def test_add_idea(session: Session):
     """Test adding a new idea."""
     idea_data = IdeaCreate(
-        name="Test Idea 1",
-        description="Description for Test Idea 1",
+        arxiv="https://arxiv.org/abs/1234.00001",
         evidence=["http://example.com/evidence1"],
         status="testing",
     )
@@ -73,26 +76,25 @@ def test_add_idea(session: Session):
 
     assert created_idea.id is not None
     assert isinstance(created_idea.id, UUID)
-    assert created_idea.name == idea_data.name
-    assert created_idea.description == idea_data.description
+    assert created_idea.arxiv == idea_data.arxiv
     assert created_idea.evidence == idea_data.evidence
     assert created_idea.status == idea_data.status
 
     # Verify it's in the DB by trying to get it via a new session or the same one
     retrieved_idea = session.get(Idea, created_idea.id)
     assert retrieved_idea is not None
-    assert retrieved_idea.name == idea_data.name
+    assert retrieved_idea.arxiv == idea_data.arxiv
 
 
 def test_get_idea_by_id(session: Session):
     """Test retrieving an idea by its ID."""
-    idea_data = IdeaCreate(name="Test Idea 2", description="Desc 2")
+    idea_data = IdeaCreate(arxiv="https://arxiv.org/abs/2222.2222")
     created_idea = idea_ledger.add_idea(idea_data)
 
     fetched_idea = idea_ledger.get_idea_by_id(created_idea.id)
     assert fetched_idea is not None
     assert fetched_idea.id == created_idea.id
-    assert fetched_idea.name == "Test Idea 2"
+    assert fetched_idea.arxiv == "https://arxiv.org/abs/2222.2222"
 
 
 def test_get_non_existent_idea():
@@ -111,9 +113,9 @@ def test_list_ideas_empty():
 # Add session for direct verification if needed
 def test_list_ideas_with_items_and_pagination(session: Session):
     """Test listing ideas with items and basic pagination."""
-    idea1_data = IdeaCreate(name="List Idea 1", description="Desc A")
-    idea2_data = IdeaCreate(name="List Idea 2", description="Desc B")
-    idea3_data = IdeaCreate(name="List Idea 3", description="Desc C")
+    idea1_data = IdeaCreate(arxiv="https://arxiv.org/abs/list1")
+    idea2_data = IdeaCreate(arxiv="https://arxiv.org/abs/list2")
+    idea3_data = IdeaCreate(arxiv="https://arxiv.org/abs/list3")
 
     idea1 = idea_ledger.add_idea(idea1_data)
     idea2 = idea_ledger.add_idea(idea2_data)
@@ -143,11 +145,11 @@ def test_list_ideas_with_items_and_pagination(session: Session):
 
 def test_update_idea(session: Session):
     """Test updating an existing idea."""
-    idea_data = IdeaCreate(name="Update Idea", description="Initial Desc")
+    idea_data = IdeaCreate(arxiv="https://arxiv.org/abs/update")
     created_idea = idea_ledger.add_idea(idea_data)
 
     update_data = IdeaUpdate(
-        name="Updated Idea Name",
+        arxiv="https://arxiv.org/abs/updated",
         status="in_progress",
         evidence=["http://new.evidence/link"],
     )
@@ -155,24 +157,20 @@ def test_update_idea(session: Session):
 
     assert updated_idea is not None
     assert updated_idea.id == created_idea.id
-    assert updated_idea.name == "Updated Idea Name"
+    assert updated_idea.arxiv == "https://arxiv.org/abs/updated"
     assert updated_idea.status == "in_progress"
     assert updated_idea.evidence == ["http://new.evidence/link"]
-    # Description was not in update_data
-    assert updated_idea.description == "Initial Desc"
 
     # Verify in DB
     refreshed_idea = session.get(Idea, created_idea.id)
     assert refreshed_idea is not None
-    assert refreshed_idea.name == "Updated Idea Name"
+    assert refreshed_idea.arxiv == "https://arxiv.org/abs/updated"
     assert refreshed_idea.status == "in_progress"
 
 
 def test_update_idea_partial(session: Session):
     """Test partially updating an existing idea."""
-    idea_data = IdeaCreate(
-        name="Partial Update Idea", description="Full Desc", status="pending"
-    )
+    idea_data = IdeaCreate(arxiv="https://arxiv.org/abs/partial", status="pending")
     created_idea = idea_ledger.add_idea(idea_data)
 
     update_data = IdeaUpdate(status="approved")  # Only update status
@@ -180,23 +178,22 @@ def test_update_idea_partial(session: Session):
 
     assert updated_idea is not None
     assert updated_idea.status == "approved"
-    assert updated_idea.name == "Partial Update Idea"  # Name should remain unchanged
     assert (
-        updated_idea.description == "Full Desc"
-    )  # Description should remain unchanged
+        updated_idea.arxiv == "https://arxiv.org/abs/partial"
+    )  # Should remain unchanged
 
 
 def test_update_non_existent_idea():
     """Test updating a non-existent idea."""
     non_existent_id = uuid4()
-    update_data = IdeaUpdate(name="Non Existent Update")
+    update_data = IdeaUpdate(arxiv="https://arxiv.org/abs/nonexistent")
     updated_idea = idea_ledger.update_idea(non_existent_id, update_data)
     assert updated_idea is None
 
 
 def test_delete_idea(session: Session):
     """Test deleting an existing idea."""
-    idea_data = IdeaCreate(name="Delete Me", description="I will be deleted")
+    idea_data = IdeaCreate(arxiv="https://arxiv.org/abs/delete-me")
     created_idea = idea_ledger.add_idea(idea_data)
 
     # Ensure it's there first
