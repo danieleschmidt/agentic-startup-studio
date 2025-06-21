@@ -53,3 +53,22 @@ def load_all_agents(root="agents"):
         agent = _to_wrapper(cfg)
         out[cfg["name"].lower()] = agent
     return out
+
+def load_agent(name: str, root: str = "agents"):
+    """Load a single agent configuration by name.
+
+    Parameters
+    ----------
+    name:
+        Name of the agent (case-insensitive, matches the ``name`` field in YAML).
+    root:
+        Root directory containing agent YAML files. Defaults to ``"agents"``.
+
+    Returns
+    -------
+    object | None
+        The loaded agent wrapper instance or ``None`` if not found.
+    """
+    name = name.lower()
+    agents = load_all_agents(root)
+    return agents.get(name)
