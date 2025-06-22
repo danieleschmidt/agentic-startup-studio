@@ -672,7 +672,7 @@ class TestIdeaValidator:
         """Given content validation failures, when validating, then accumulates all errors."""
         # Setup mocks
         sanitized_data = sample_raw_data.copy()
-        mock_sanitizer.sanitize_idea_draft.sanitized_data
+        mock_sanitizer.sanitize_idea_draft.return_value = sanitized_data
         
         # Business validation passes
         valid_result = ValidationResult(is_valid=True)

@@ -1,18 +1,20 @@
-import click
 import os
 import shutil  # For cleaning up generated MVP path if needed during testing/retries
-from typing import Dict, Any  # For type hints
+from typing import Any  # For type hints
+
+import click
 
 # Assuming core.build_tools_manager is accessible via PYTHONPATH
 from core.build_tools_manager import run_gpt_engineer, run_opendevin_debug_loop
 
 # from core.idea_ledger import get_idea_by_id # Placeholder
 from core.deployment_manager import (
-    deploy_to_fly_io,
     check_fly_io_health,
+    deploy_to_fly_io,
 )  # Import these
 
-GENERATED_MVPS_DIR = "generated_mvps"  # Default base directory
+DEFAULT_MVPS_DIR = "generated_mvps"
+GENERATED_MVPS_DIR = os.getenv("GENERATED_MVPS_DIR", DEFAULT_MVPS_DIR)
 
 
 @click.command()
@@ -83,7 +85,7 @@ def run_build_cycle(idea_id: str, clean_output: bool):
     #     click.echo(f"Error fetching idea from ledger: {e}", err=True)
     #     return
 
-    mock_idea_details: Dict[str, Any] = {
+    mock_idea_details: dict[str, Any] = {
         "id": idea_id,
         "name": f"App for {idea_id}",
         "description": (

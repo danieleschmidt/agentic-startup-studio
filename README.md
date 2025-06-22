@@ -54,12 +54,12 @@ flowchart TD
     Research --> Deck[Pitch Deck Generation]
     Deck --> Test[Smoke Testing]
     Test --> Deploy[Deployment]
-    
+
     subgraph Storage
         DB[(PostgreSQL)]
         Vector[(pgvector)]
     end
-    
+
     subgraph Services
         Evidence[Evidence Collector]
         PitchGen[Pitch Generator]
@@ -208,6 +208,16 @@ python -m pipeline.cli.ingestion_cli similar <idea-uuid> --limit 5
 
 # System health check
 python -m pipeline.cli.ingestion_cli health
+
+# Run standalone health checks
+python scripts/run_health_checks.py --results-file health_check_results.json
+
+# Serve API with health endpoints
+# /health returns JSON status, /metrics exposes Prometheus metrics
+# Set ENABLE_TRACING=true to emit OpenTelemetry spans
+# External API calls automatically retry on failure using exponential backoff
+# LLM token usage metrics are exported on http://localhost:9102/metrics
+python scripts/serve_api.py --port 8000
 ```
 
 ---
@@ -282,6 +292,22 @@ MAX_IDEAS_PER_HOUR=10
 TOTAL_CYCLE_BUDGET=62.00
 OPENAI_BUDGET=10.00
 GOOGLE_ADS_BUDGET=45.00
+FUND_THRESHOLD=0.8
+INVESTOR_PROFILE=vc
+DECK_TEMPLATE_PATH=templates/deck_template.marp
+SMOKE_TEST_RESULTS_DIR=smoke_tests
+GENERATED_MVPS_DIR=generated_mvps
+HEALTH_CHECK_RESULTS_FILE=health_check_results.json
+# Infrastructure Settings
+CIRCUIT_BREAKER_FAILURE_THRESHOLD=5
+CIRCUIT_BREAKER_TIMEOUT_SECONDS=30
+CIRCUIT_BREAKER_RECOVERY_TIMEOUT=60
+CIRCUIT_BREAKER_SUCCESS_THRESHOLD=3
+HEALTH_CHECK_INTERVAL=30
+ENABLE_HEALTH_MONITORING=True
+ENABLE_TRACING=False
+QUALITY_GATE_ENABLED=True
+QUALITY_GATE_TIMEOUT_SECONDS=30
 ```
 
 ### Configuration Categories

@@ -74,8 +74,12 @@ bootstrap:  ## spin up core infra
 pitch-loop:  ## run one founder→investor cycle
 	python scripts/run_pitch.py --tokens $${MAX_TOKENS-20000} --threshold $${FUND_THRESHOLD-0.8}
 
-build-cycle: ## placeholder for Milestone 3
-	@echo "Coming soon…"
+build-cycle: ## build and deploy MVP for IDEA_ID
+		@if [ -z "$(IDEA_ID)" ]; then 
+			echo "IDEA_ID is required. Usage: make build-cycle IDEA_ID=<id>"; 
+			exit 1; 
+		fi
+		python scripts/run_build_cycle.py --idea-id $(IDEA_ID)
 
 help:
 	@grep -E '^[a-zA-Z_-]+:.*?##' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS=":.*?##"}; {printf "\033[36m%-12s\033[0m %s\n", $$1, $$2}'

@@ -1,10 +1,12 @@
+import importlib
+import shutil
+from pathlib import Path
+from unittest import mock
+
 import pytest
 from click.testing import CliRunner
-from scripts.run_build_cycle import run_build_cycle, GENERATED_MVPS_DIR
-import os
-import shutil
-from unittest import mock
-from pathlib import Path
+
+from scripts.run_build_cycle import GENERATED_MVPS_DIR, run_build_cycle
 
 # Define a directory for test outputs, distinct from build_tools_manager tests
 TEST_BUILD_CYCLE_BASE_OUTPUT_DIR = Path("tests/temp_build_cycle_outputs")
@@ -180,3 +182,9 @@ def test_run_build_cycle_missing_idea_id():
     result = runner.invoke(run_build_cycle, [])  # No idea-id
     assert result.exit_code != 0
     assert "Missing option '--idea-id'" in result.output
+
+
+def test_generated_mvps_dir_env(monkeypatch):
+    monkeypatch.setenv("GENERATED_MVPS_DIR", "env_mvp")
+    module = importlib.reload(importlib.import_module("scripts.run_build_cycle"))
+    assert module.GENERATED_MVPS_DIR.endswith("env_mvp")

@@ -1,20 +1,22 @@
-import click
 import json
 import os
 import time
 
-# Assuming core.ads_manager and core.idea_ledger are accessible
-# This script is intended to be run with PYTHONPATH including the project root.
-from core.ads_manager import (
-    deploy_landing_page_to_unbounce,
-    create_google_ads_campaign,
-    get_campaign_metrics,
-)
+import click
 
 # from core.idea_ledger import get_idea_by_id # Placeholder for future use
 from core.ad_budget_sentinel import AdBudgetSentinel  # Import AdBudgetSentinel
 
-SMOKE_TEST_RESULTS_DIR = "smoke_tests"  # Default results directory
+# Assuming core.ads_manager and core.idea_ledger are accessible
+# This script is intended to be run with PYTHONPATH including the project root.
+from core.ads_manager import (
+    create_google_ads_campaign,
+    deploy_landing_page_to_unbounce,
+    get_campaign_metrics,
+)
+
+DEFAULT_RESULTS_DIR = "smoke_tests"
+SMOKE_TEST_RESULTS_DIR = os.getenv("SMOKE_TEST_RESULTS_DIR", DEFAULT_RESULTS_DIR)
 TARGET_CTR_FOR_BUDGET_INCREASE = 0.05  # 5% CTR target for budget increase
 
 
@@ -180,7 +182,7 @@ def run_smoke_test(idea_id: str, budget: float, results_dir: str):
         with open(analytics_file_path, "w", encoding="utf-8") as f:
             json.dump(metrics, f, indent=4)
         click.echo(f"Mock metrics saved to: {analytics_file_path}")
-    except IOError as e:
+    except OSError as e:
         click.echo(f"Error saving metrics: {e}", err=True)
 
     # 7. Simulate pushing metrics to PostHog (placeholder)
