@@ -9,16 +9,12 @@ Implements automated pitch deck generation using:
 - Cost tracking and budget enforcement integration
 """
 
-import asyncio
-import json
 import logging
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Tuple, Union
 
-from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
+from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 
 # START is not re-exported from langgraph.graph in some versions
@@ -67,9 +63,9 @@ class SlideContent:
     slide_type: SlideType
     title: str
     content: str
-    bullet_points: List[str] = field(default_factory=list)
-    visual_suggestions: List[str] = field(default_factory=list)
-    supporting_evidence: List[Evidence] = field(default_factory=list)
+    bullet_points: list[str] = field(default_factory=list)
+    visual_suggestions: list[str] = field(default_factory=list)
+    supporting_evidence: list[Evidence] = field(default_factory=list)
     quality_score: float = 0.0
     generated_at: datetime = field(default_factory=datetime.utcnow)
 
@@ -80,9 +76,9 @@ class PitchDeck:
 
     startup_name: str
     investor_type: InvestorType
-    slides: List[SlideContent] = field(default_factory=list)
+    slides: list[SlideContent] = field(default_factory=list)
     executive_summary: str = ""
-    appendix_materials: List[str] = field(default_factory=list)
+    appendix_materials: list[str] = field(default_factory=list)
 
     # Quality metrics
     overall_quality_score: float = 0.0
@@ -101,16 +97,16 @@ class GenerationState:
 
     startup_idea: str
     target_investor: InvestorType
-    evidence_by_domain: Dict[str, List[Evidence]]
+    evidence_by_domain: dict[str, list[Evidence]]
 
     # Generation progress
     current_slide_index: int = 0
-    generated_slides: List[SlideContent] = field(default_factory=list)
-    failed_slides: List[Tuple[SlideType, str]] = field(default_factory=list)
+    generated_slides: list[SlideContent] = field(default_factory=list)
+    failed_slides: list[tuple[SlideType, str]] = field(default_factory=list)
 
     # Quality tracking
-    quality_gates_passed: List[str] = field(default_factory=list)
-    quality_issues: List[str] = field(default_factory=list)
+    quality_gates_passed: list[str] = field(default_factory=list)
+    quality_issues: list[str] = field(default_factory=list)
 
     # Cost tracking
     total_cost: float = 0.0
@@ -153,7 +149,7 @@ class PitchDeckGenerator:
     async def generate_pitch_deck(
         self,
         startup_idea: str,
-        evidence_by_domain: Dict[str, List[Evidence]],
+        evidence_by_domain: dict[str, list[Evidence]],
         target_investor: InvestorType = InvestorType.SEED,
         max_cost: float = 10.0,
     ) -> PitchDeck:
@@ -256,7 +252,7 @@ class PitchDeckGenerator:
             self.logger.error(f"Workflow execution failed: {e}")
             raise
 
-    async def _prepare_generation(self, inputs: Dict) -> Dict:
+    async def _prepare_generation(self, inputs: dict) -> dict:
         """Prepare for pitch deck generation."""
         state = inputs["state"]
 
@@ -275,7 +271,7 @@ class PitchDeckGenerator:
 
         return {"state": state}
 
-    async def _generate_title_slide(self, inputs: Dict) -> Dict:
+    async def _generate_title_slide(self, inputs: dict) -> dict:
         """Generate title slide."""
         state = inputs["state"]
 
@@ -291,7 +287,7 @@ class PitchDeckGenerator:
 
         return {"state": state}
 
-    async def _generate_problem_slide(self, inputs: Dict) -> Dict:
+    async def _generate_problem_slide(self, inputs: dict) -> dict:
         """Generate problem slide."""
         state = inputs["state"]
 
@@ -313,7 +309,7 @@ class PitchDeckGenerator:
 
         return {"state": state}
 
-    async def _generate_solution_slide(self, inputs: Dict) -> Dict:
+    async def _generate_solution_slide(self, inputs: dict) -> dict:
         """Generate solution slide."""
         state = inputs["state"]
 
@@ -334,7 +330,7 @@ class PitchDeckGenerator:
 
         return {"state": state}
 
-    async def _generate_market_slide(self, inputs: Dict) -> Dict:
+    async def _generate_market_slide(self, inputs: dict) -> dict:
         """Generate market size slide."""
         state = inputs["state"]
 
@@ -355,7 +351,7 @@ class PitchDeckGenerator:
 
         return {"state": state}
 
-    async def _generate_business_model_slide(self, inputs: Dict) -> Dict:
+    async def _generate_business_model_slide(self, inputs: dict) -> dict:
         """Generate business model slide."""
         state = inputs["state"]
 
@@ -376,7 +372,7 @@ class PitchDeckGenerator:
 
         return {"state": state}
 
-    async def _generate_traction_slide(self, inputs: Dict) -> Dict:
+    async def _generate_traction_slide(self, inputs: dict) -> dict:
         """Generate traction slide."""
         state = inputs["state"]
 
@@ -397,7 +393,7 @@ class PitchDeckGenerator:
 
         return {"state": state}
 
-    async def _generate_team_slide(self, inputs: Dict) -> Dict:
+    async def _generate_team_slide(self, inputs: dict) -> dict:
         """Generate team slide."""
         state = inputs["state"]
 
@@ -418,7 +414,7 @@ class PitchDeckGenerator:
 
         return {"state": state}
 
-    async def _generate_financials_slide(self, inputs: Dict) -> Dict:
+    async def _generate_financials_slide(self, inputs: dict) -> dict:
         """Generate financial projections slide."""
         state = inputs["state"]
 
@@ -439,7 +435,7 @@ class PitchDeckGenerator:
 
         return {"state": state}
 
-    async def _generate_funding_slide(self, inputs: Dict) -> Dict:
+    async def _generate_funding_slide(self, inputs: dict) -> dict:
         """Generate funding ask slide."""
         state = inputs["state"]
 
@@ -460,7 +456,7 @@ class PitchDeckGenerator:
 
         return {"state": state}
 
-    async def _validate_quality_gates(self, inputs: Dict) -> Dict:
+    async def _validate_quality_gates(self, inputs: dict) -> dict:
         """Validate quality gates for generated content."""
         state = inputs["state"]
 
@@ -501,7 +497,7 @@ class PitchDeckGenerator:
 
         return {"state": state}
 
-    async def _finalize_deck(self, inputs: Dict) -> Dict:
+    async def _finalize_deck(self, inputs: dict) -> dict:
         """Finalize the pitch deck."""
         state = inputs["state"]
 
@@ -522,7 +518,7 @@ class PitchDeckGenerator:
         state: GenerationState,
         slide_type: SlideType,
         prompt: str,
-        evidence: List[Evidence],
+        evidence: list[Evidence],
     ) -> SlideContent:
         """Generate content for a specific slide."""
         try:
@@ -533,23 +529,28 @@ class PitchDeckGenerator:
             template = self.slide_templates[state.target_investor][slide_type]
 
             # Create generation prompt
-            full_prompt = f"""
+            full_prompt = (
+                f"""
             {template}
-            
+
             Startup Idea: {state.startup_idea}
-            
+
             Task: {prompt}
-            
+
             Supporting Evidence:
             {evidence_context}
-            
+
             Generate engaging, investor-focused content for this slide.
             Include specific bullet points and visual suggestions.
             """
+            )
 
             # Generate content using LLM
             messages = [SystemMessage(content=full_prompt)]
-            response = await self.llm.ainvoke(messages)
+            # Use exponential backoff for transient LLM failures
+            from pipeline.utils.backoff import async_retry
+
+            response = await async_retry(self.llm.ainvoke, messages)
 
             # Parse response into structured content
             slide_content = self._parse_slide_response(
@@ -572,8 +573,8 @@ class PitchDeckGenerator:
             )
 
     def _find_relevant_evidence(
-        self, evidence_by_domain: Dict[str, List[Evidence]], keywords: List[str]
-    ) -> List[Evidence]:
+        self, evidence_by_domain: dict[str, list[Evidence]], keywords: list[str]
+    ) -> list[Evidence]:
         """Find evidence relevant to specific keywords."""
         relevant_evidence = []
 
@@ -588,7 +589,7 @@ class PitchDeckGenerator:
         relevant_evidence.sort(key=lambda x: x.composite_score, reverse=True)
         return relevant_evidence[:3]
 
-    def _build_evidence_context(self, evidence: List[Evidence]) -> str:
+    def _build_evidence_context(self, evidence: list[Evidence]) -> str:
         """Build context string from evidence."""
         if not evidence:
             return "No specific evidence available."
@@ -604,7 +605,7 @@ class PitchDeckGenerator:
         return "\n\n".join(context_parts)
 
     def _parse_slide_response(
-        self, slide_type: SlideType, response_content: str, evidence: List[Evidence]
+        self, slide_type: SlideType, response_content: str, evidence: list[Evidence]
     ) -> SlideContent:
         """Parse LLM response into structured slide content."""
         # Simple parsing (in production, would use more sophisticated parsing)
@@ -678,8 +679,8 @@ class PitchDeckGenerator:
         return " ".join(word.capitalize() for word in words)
 
     async def _analyze_evidence_insights(
-        self, evidence_by_domain: Dict[str, List[Evidence]]
-    ) -> Dict:
+        self, evidence_by_domain: dict[str, list[Evidence]]
+    ) -> dict:
         """Analyze evidence for key insights."""
         return {"total_evidence": sum(len(ev) for ev in evidence_by_domain.values())}
 
@@ -687,13 +688,13 @@ class PitchDeckGenerator:
         """Generate executive summary."""
         return f"Executive summary for {getattr(state, 'startup_name', 'startup')}"
 
-    def _load_slide_templates(self) -> Dict[InvestorType, Dict[SlideType, str]]:
+    def _load_slide_templates(self) -> dict[InvestorType, dict[SlideType, str]]:
         """Load slide templates by investor type."""
         # Simplified templates (in production, would load from files)
         base_template = "Create a professional slide focusing on the key points."
 
         return {
-            investor_type: {slide_type: base_template for slide_type in SlideType}
+            investor_type: dict.fromkeys(SlideType, base_template)
             for investor_type in InvestorType
         }
 

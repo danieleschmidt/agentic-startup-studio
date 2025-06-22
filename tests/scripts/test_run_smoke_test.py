@@ -1,15 +1,16 @@
-import pytest
-from click.testing import CliRunner
-from scripts.run_smoke_test import run_smoke_test
+import json
 
 # SMOKE_TEST_RESULTS_DIR can be imported for assertion,
 # but patching it in the script's namespace is more direct for tests.
 # from scripts.run_smoke_test import SMOKE_TEST_RESULTS_DIR as SCRIPT_DEFAULT_DIR
-import os
-import json
 import shutil  # For cleaning up directories
-from unittest import mock  # Use unittest.mock for mocking
 from pathlib import Path
+from unittest import mock  # Use unittest.mock for mocking
+
+import pytest
+from click.testing import CliRunner
+
+from scripts.run_smoke_test import run_smoke_test
 
 # Define a directory for test outputs to avoid cluttering the main smoke_tests dir
 # Using Path for robust path construction
@@ -112,7 +113,7 @@ def test_run_smoke_test_successful_flow(
     assert expected_analytics_path.exists(), (
         f"Analytics file not found at {expected_analytics_path}"
     )
-    with open(expected_analytics_path, "r") as f:
+    with open(expected_analytics_path) as f:
         saved_metrics = json.load(f)
     assert saved_metrics == mock_metrics_data
 
@@ -231,7 +232,7 @@ def test_run_smoke_test_metrics_saving_error(
     mock_deploy_page.return_value = "http://mockpages.com/test-io-error"
     mock_create_campaign.return_value = "mock-campaign-id-io-error"
     mock_get_metrics.return_value = {"data": "test"}
-    mock_json_dump.side_effect = IOError("Simulated disk full error")
+    mock_json_dump.side_effect = OSError("Simulated disk full error")
 
     runner = CliRunner()
     result = runner.invoke(
@@ -290,3 +291,10 @@ def test_run_smoke_test_ad_budget_exceeded(
         f"Further actions would be halted."
     )
     assert msg in result.output
+
+
+def test_results_dir_env(monkeypatch):
+    monkeypatch.setenv("SMOKE_TEST_RESULTS_DIR", "env_dir")
+    import importlib
+    module = importlib.reload(importlib.import_module("scripts.run_smoke_test"))
+    assert module.SMOKE_TEST_RESULTS_DIR.endswith("env_dir")
