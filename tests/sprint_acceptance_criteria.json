@@ -1,0 +1,20 @@
+{
+  "perform-architecture-analysis-for-review-conduct-a-full-architecture-review-to-define-initial-tasks": {
+    "test_file": "tests/test_perform-architecture-analysis-for-review-conduct-a-full-architecture-review-to-define-initial-tasks.py",
+    "cases": {
+      "success": "Asserts the primary success case."
+    }
+  },
+  "compile-findings-and-recommendations-for-review-conduct-a-full-architecture-review-to-define-initial-tasks": {
+    "test_file": "tests/test_compile-findings-and-recommendations-for-review-conduct-a-full-architecture-review-to-define-initial-tasks.py",
+    "cases": {
+      "success": "Asserts the primary success case."
+    }
+  },
+  "outline-initial-task-breakdown-based-on-review-conduct-a-full-architecture-review-to-define-initial-tasks": {
+    "test_file": "tests/test_outline-initial-task-breakdown-based-on-review-conduct-a-full-architecture-review-to-define-initial-tasks.py",
+    "cases": {
+      "success": "Asserts the primary success case."
+    }
+  }
+}

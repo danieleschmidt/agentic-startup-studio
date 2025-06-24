@@ -97,6 +97,7 @@ Issues = "https://github.com/your-org/agentic-startup-studio/issues"
 [project.scripts]
 pipeline-cli = "pipeline.cli.ingestion_cli:app"
 studio-setup = "setup:main"
+architecture-review = "agentic_startup_studio.arch_review:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["pipeline"]
