@@ -1,8 +1,9 @@
-# Sprint Board: **Review:** Conduct a full architecture review to define initial tasks.
+# Sprint Board: **Testing:** Write unit tests for all feature modules.
 
 ## Backlog
 | Task | Owner | Priority | Status |
 | --- | --- | --- | --- |
-| Perform architecture analysis for **Review:** Conduct a full architecture review to define initial tasks. | @agent | P1 | Ready |
-| Compile findings and recommendations for **Review:** Conduct a full architecture review to define initial tasks. | @agent | P1 | Ready |
-| Outline initial task breakdown based on **Review:** Conduct a full architecture review to define initial tasks. | @agent | P1 | Ready |
+| Set up pytest and coverage infrastructure for Testing: Write unit tests for all feature modules. | @agent | P1 | Done |
+| Implement unit tests for Idea model and CLI. | @agent | P1 | Done |
+| Write tests for ArchitectureAnalyzer module. | @agent | P1 | Done |
+| Integrate coverage reports and ensure >=80% coverage. | @agent | P1 | Done |
