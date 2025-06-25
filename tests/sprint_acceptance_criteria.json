@@ -1,20 +1,30 @@
 {
-  "perform-architecture-analysis-for-review-conduct-a-full-architecture-review-to-define-initial-tasks": {
-    "test_file": "tests/test_perform-architecture-analysis-for-review-conduct-a-full-architecture-review-to-define-initial-tasks.py",
+  "set-up-pytest-and-coverage-infrastructure-for-testing-write-unit-tests-for-all-feature-modules": {
+    "test_file": "tests/test_set-up-pytest-and-coverage-infrastructure-for-testing-write-unit-tests-for-all-feature-modules.py",
     "cases": {
-      "success": "Asserts the primary success case."
+      "success": "pytest runs successfully and coverage data is produced",
+      "edge": "Handles absence of .coveragerc gracefully"
     }
   },
-  "compile-findings-and-recommendations-for-review-conduct-a-full-architecture-review-to-define-initial-tasks": {
-    "test_file": "tests/test_compile-findings-and-recommendations-for-review-conduct-a-full-architecture-review-to-define-initial-tasks.py",
+  "implement-unit-tests-for-idea-model-and-cli": {
+    "test_file": "tests/test_implement-unit-tests-for-idea-model-and-cli.py",
     "cases": {
-      "success": "Asserts the primary success case."
+      "success": "Valid idea inputs pass validation and CLI returns success",
+      "invalid": "Invalid inputs raise validation errors"
     }
   },
-  "outline-initial-task-breakdown-based-on-review-conduct-a-full-architecture-review-to-define-initial-tasks": {
-    "test_file": "tests/test_outline-initial-task-breakdown-based-on-review-conduct-a-full-architecture-review-to-define-initial-tasks.py",
+  "write-tests-for-architectureanalyzer-module": {
+    "test_file": "tests/test_write-tests-for-architectureanalyzer-module.py",
     "cases": {
-      "success": "Asserts the primary success case."
+      "success": "ArchitectureAnalyzer generates a markdown report",
+      "edge": "Handles unparsable files without crashing"
+    }
+  },
+  "integrate-coverage-reports-and-ensure-80-coverage": {
+    "test_file": "tests/test_integrate-coverage-reports-and-ensure-80-coverage.py",
+    "cases": {
+      "success": "Coverage percentage is at least 80%",
+      "failing": "Fails the build if coverage drops below threshold"
     }
   }
 }
