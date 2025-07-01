@@ -1,27 +1,19 @@
 # core/token_budget_sentinel.py
-from typing import Optional, List  # Callable removed if not used in constructor
-from core.alert_manager import AlertManager  # Added import
+from typing import Optional, List
+from core.alert_manager import AlertManager
+from core.budget_sentinel_base import BaseBudgetSentinel
 
 
-class TokenBudgetSentinel:
+class TokenBudgetSentinel(BaseBudgetSentinel):
     """
     Monitors token usage against a predefined budget and triggers alerts
     via an AlertManager.
     """
 
     def __init__(self, max_tokens: int, alert_manager: Optional[AlertManager] = None):
-        """
-        Initializes the sentinel with a maximum token budget and an AlertManager.
-
-        Args:
-            max_tokens: The maximum number of tokens allowed.
-            alert_manager: An optional AlertManager instance to record alerts.
-        """
-        if max_tokens <= 0:
-            raise ValueError("max_tokens must be positive.")
-        self.max_tokens = max_tokens
+        super().__init__(max_tokens, alert_manager.record_alert if alert_manager else None)
         self.alert_manager = alert_manager
-        self.alerts_triggered_messages_for_test: List[str] = []  # For direct testing
+        self.alerts_triggered_messages_for_test: List[str] = []
 
     def check_usage(
         self, current_tokens_used: int, context: str = "General Usage"
@@ -43,42 +35,20 @@ class TokenBudgetSentinel:
 
         if current_tokens_used > self.max_tokens:
             alert_message = (
-                f"ALERT: Token budget exceeded in context '{context}'. "
+                f"Token budget exceeded in context '{context}'. "
                 f"Usage: {current_tokens_used}, Budget: {self.max_tokens}."
             )
-            # For direct testing of this class, store the message
             self.alerts_triggered_messages_for_test.append(alert_message)
-
-            if self.alert_manager:
-                try:
-                    self.alert_manager.record_alert(
-                        message=alert_message,
-                        level="CRITICAL",  # More specific level
-                        source=f"TokenBudgetSentinel({context})",
-                    )
-                except Exception as e:
-                    # Fallback print if alert_manager itself fails
-                    print(f"Error using AlertManager from TokenBudgetSentinel: {e}")
-                    # Still print the core warning if AlertManager fails
-                    print(f"Warning (TokenBudgetSentinel Fallback): {alert_message}")
-            else:
-                # Fallback if no alert_manager is provided
-                print(f"Warning (TokenBudgetSentinel): {alert_message}")
-
+            self._trigger_alert(alert_message, context)
             return False
 
-        # Optional: Log normal usage
-        # print(
-        #    f"Token usage in '{context}' is within budget: "
-        #    f"{current_tokens_used}/{self.max_tokens}"
-        # )
         return True
 
-    def get_internal_alerts_for_test(self) -> List[str]:  # Renamed
+    def get_internal_alerts_for_test(self) -> List[str]:
         """Returns alert messages triggered internally, for testing."""
         return self.alerts_triggered_messages_for_test
 
-    def clear_internal_alerts_for_test(self) -> None:  # Renamed
+    def clear_internal_alerts_for_test(self) -> None:
         """Clears the internal list of triggered alert messages."""
         self.alerts_triggered_messages_for_test = []
 

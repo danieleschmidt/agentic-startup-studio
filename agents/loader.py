@@ -10,8 +10,33 @@ from pathlib import Path
 import yaml, os, textwrap, random
 from types import SimpleNamespace
 from dotenv import load_dotenv
+from google.cloud import secretmanager
 
-load_dotenv()
+def access_secret_version(secret_id, version_id="latest"):
+    """
+    Access the payload for the given secret version and return it.
+    """
+    # Create the Secret Manager client.
+    client = secretmanager.SecretManagerServiceClient()
+
+    # Build the resource name of the secret version.
+    name = f"projects/{os.environ['GOOGLE_CLOUD_PROJECT']}/secrets/{secret_id}/versions/{version_id}"
+
+    # Access the secret version.
+    response = client.access_secret_version(name=name)
+
+    # Return the decoded payload.
+    return response.payload.data.decode("UTF-8")
+
+
+if os.getenv("SECRET_IDS"):
+    for secret_id in os.getenv("SECRET_IDS").split(","):
+        secret_value = access_secret_version(secret_id)
+        for line in secret_value.splitlines():
+            key, value = line.split("=", 1)
+            os.environ[key] = value
+else:
+    load_dotenv()
 
 # --- naïve LLM shims ---------------------------------------------------- #
 class BaseWrapper:

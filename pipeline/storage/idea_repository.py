@@ -14,6 +14,7 @@ from uuid import UUID, uuid4
 
 import asyncpg
 import numpy as np
+from sentence_transformers import SentenceTransformer
 from asyncpg import Connection, Pool
 
 from pipeline.models.idea import (
@@ -46,33 +47,25 @@ class EmbeddingService:
     def __init__(self, config: DatabaseConfig):
         self.config = config
         self._embedding_cache: Dict[str, np.ndarray] = {}
+        self.model = SentenceTransformer('all-MiniLM-L6-v2') # Initialize the SentenceTransformer model
     
     async def generate_embedding(self, text: str) -> np.ndarray:
         """
-        Generate vector embedding for text.
+        Generate vector embedding for text using SentenceTransformer.
         
         Args:
             text: Text to embed
             
         Returns:
             Vector embedding as numpy array
-            
-        Note:
-            In production, this would call an external embedding service
-            (OpenAI, Hugging Face, etc.). For now, using mock implementation.
         """
-        # Mock embedding generation - replace with actual service call
-        text_hash = hash(text)
+        if text in self._embedding_cache:
+            return self._embedding_cache[text]
         
-        if text_hash in self._embedding_cache:
-            return self._embedding_cache[text_hash]
+        # Generate embedding using the SentenceTransformer model
+        embedding = self.model.encode(text, convert_to_numpy=True)
         
-        # Generate deterministic mock embedding for testing
-        np.random.seed(abs(text_hash) % (2**32))
-        embedding = np.random.normal(0, 1, self.config.vector_dimensions)
-        embedding = embedding / np.linalg.norm(embedding)  # Normalize
-        
-        self._embedding_cache[text_hash] = embedding
+        self._embedding_cache[text] = embedding
         
         logger.debug(f"Generated embedding for text (length: {len(text)})")
         return embedding
@@ -182,6 +175,7 @@ class DatabaseManager:
         CREATE INDEX IF NOT EXISTS idx_ideas_created_at ON ideas(created_at);
         CREATE INDEX IF NOT EXISTS idx_audit_idea_id ON idea_audit(idea_id);
         CREATE INDEX IF NOT EXISTS idx_audit_timestamp ON idea_audit(timestamp);
+        CREATE INDEX IF NOT EXISTS idx_ideas_title ON ideas(title);
         
         -- Vector similarity index
         CREATE INDEX IF NOT EXISTS idx_embeddings_vector 

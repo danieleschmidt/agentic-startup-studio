@@ -1,8 +1,9 @@
 # core/ad_budget_sentinel.py
-from typing import Optional, Callable, List  # Added Dict, Any for future use
+from typing import Optional, Callable, List
+from core.budget_sentinel_base import BaseBudgetSentinel
 
 
-class AdBudgetSentinel:
+class AdBudgetSentinel(BaseBudgetSentinel):
     """
     Monitors advertising spend against a predefined budget,
     triggers alerts, and can invoke a halt callback.
@@ -15,27 +16,12 @@ class AdBudgetSentinel:
         halt_callback: Optional[Callable[[str, str], None]] = None,
         alert_callback: Optional[Callable[[str], None]] = None,
     ):
-        """
-        Initializes the sentinel.
-
-        Args:
-            max_budget: The maximum budget allowed for the campaign.
-            campaign_id: The ID of the campaign being monitored.
-            halt_callback: Optional function to call to halt the campaign.
-                           Accepts campaign_id (str) and a reason message (str).
-            alert_callback: Optional function to call for alerts.
-                            Accepts an alert message (str).
-        """
-        if max_budget <= 0:
-            raise ValueError("max_budget must be positive.")
-        if not campaign_id:  # Check if campaign_id is empty or None
+        super().__init__(max_budget, alert_callback)
+        if not campaign_id:
             raise ValueError("campaign_id cannot be empty.")
 
-        self.max_budget = max_budget
         self.campaign_id = campaign_id
         self.halt_callback = halt_callback
-        self.alert_callback = alert_callback
-        self.alerts_triggered: List[str] = []
         self.halt_reason: Optional[str] = None
 
     def check_spend(self, current_spend: float) -> bool:
@@ -57,10 +43,7 @@ class AdBudgetSentinel:
                 f"Ad budget exceeded for campaign '{self.campaign_id}'. "
                 f"Spend: ${current_spend:.2f}, Budget: ${self.max_budget:.2f}."
             )
-            alert_message = f"ALERT: {self.halt_reason}"
-
-            print(f"Warning: {alert_message}")  # Default logging
-            self.alerts_triggered.append(alert_message)
+            self._trigger_alert(self.halt_reason)
 
             if self.halt_callback:
                 try:
@@ -69,26 +52,15 @@ class AdBudgetSentinel:
                     print(
                         f"Error in halt_callback for campaign {self.campaign_id}: {e}"
                     )
-
-            if self.alert_callback:
-                try:
-                    self.alert_callback(alert_message)
-                except Exception as e:
-                    print(
-                        f"Error in alert_callback for campaign {self.campaign_id}: {e}"
-                    )
             return False
 
         return True
 
-    def get_alerts(self) -> List[str]:
-        """Returns a list of alerts triggered during check_spend calls."""
-        return self.alerts_triggered
-
     def clear_alerts(self) -> None:
         """Clears the internal list of triggered alerts and halt reason."""
-        self.alerts_triggered = []
-        self.halt_reason = None  # Also clear halt reason
+        super().clear_alerts()
+        self.halt_reason = None
+  # Also clear halt reason
 
 
 if __name__ == "__main__":

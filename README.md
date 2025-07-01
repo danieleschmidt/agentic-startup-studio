@@ -284,6 +284,11 @@ ENVIRONMENT=development
 LOG_LEVEL=INFO
 SECRET_KEY=your-secret-key
 
+# Secrets Management (New)
+# If using Google Cloud Secret Manager, set GOOGLE_CLOUD_PROJECT and SECRET_IDS
+# GOOGLE_CLOUD_PROJECT=your-gcp-project-id
+# SECRET_IDS=secret-id-1,secret-id-2
+
 # Validation Settings
 SIMILARITY_THRESHOLD=0.8
 MAX_IDEAS_PER_HOUR=10
