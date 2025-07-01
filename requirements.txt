@@ -17,6 +17,7 @@ google-cloud-secret-manager>=2.16.2
 bandit>=1.7.8
 python-dotenv>=1.0.1
 sentence-transformers>=2.7.0
+streamlit>=1.36.0
 # additional dependencies for tests and optional features
 pydantic>=2.5.0
 pydantic-settings>=2.1.0

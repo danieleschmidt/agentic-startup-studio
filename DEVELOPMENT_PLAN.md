@@ -19,8 +19,8 @@ This document outlines the development plan for the Agentic Startup Studio. It c
 
 - [x] **Advanced Idea Analysis:** Enhance the idea analysis capabilities with more sophisticated NLP models for market trend analysis and competitive landscape assessment. ✅ Integrated `sentence-transformers` for embeddings.
 - [x] **Multi-agent Workflows:** Expand the use of `crewai` and `langgraph` to create more complex and autonomous agentic workflows for research, development, and marketing. ✅ Added a basic `crewai` example workflow.
-- [ ] **Web Interface:** Develop a web-based user interface for interacting with the platform, in addition to the existing CLI.
-- [ ] **Expanded Tool Integrations:** Integrate with more external tools for market research, patent analysis, and social media monitoring.
+- [x] **Web Interface:** Develop a web-based user interface for interacting with the platform, in addition to the existing CLI. ✅ Created a basic Streamlit app (`app.py`).
+- [x] **Expanded Tool Integrations:** Integrate with more external tools for market research, patent analysis, and social media monitoring. ✅ Added `market_research.py` tool.
 
 ## Testing & QA Expansion
 
