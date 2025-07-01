@@ -4,44 +4,43 @@ This document outlines the development plan for the Agentic Startup Studio. It c
 
 ## Critical Fixes
 
-- [x] **Security Audit:** Conduct a thorough security audit of the entire codebase, focusing on dependencies, input validation, and potential injection vulnerabilities. ✅ Attempted, but blocked by environment issues (no `python`/`uv`/`pip` commands).
-- [x] **Secrets Management:** Implement a more robust secrets management solution, such as HashiCorp Vault or AWS Secrets Manager, to avoid storing secrets in environment variables in production. ✅ Implemented Google Cloud Secret Manager integration.
-- [x] **CI Build Failures:** Investigate and resolve any intermittent failures in the CI pipeline to ensure a stable build process. ✅ Updated CI to use `uv` for dependency management.
+- [ ] **Agent Environment Setup:** Resolve underlying environment issues preventing `python`, `uv`, and `pytest` commands from executing within the agent's context. This is crucial for automated development tasks.
+- [ ] **Formal Security Audit:** Conduct a comprehensive security audit of the codebase using automated tools (e.g., Bandit) and manual review to identify and mitigate vulnerabilities.
+- [ ] **Production Secrets Management:** Implement and enforce a robust secrets management solution for production environments, ensuring no sensitive information is hardcoded or exposed via environment variables.
 
 ## High-value Refactors & Performance Wins
 
-- [x] **Performance Benchmarking:** Establish a performance benchmarking suite to identify and address bottlenecks in the data pipeline and API. ✅ Existing `performance_benchmark.py` identified.
-- [x] **Async Optimization:** Review and optimize all `asyncio` code to ensure efficient and non-blocking I/O operations. ✅ Reviewed `pipeline_infrastructure_fix.py` - `asyncio` usage is appropriate for testing.
-- [x] **Database Query Optimization:** Analyze and optimize slow-running database queries, and add appropriate indexes. ✅ Added index on `ideas.title` for faster lookups.
-- [x] **Refactor Core Services:** Refactor the core services in the `core/` directory to improve modularity and reduce code duplication. ✅ Created `BaseBudgetSentinel` and refactored `AdBudgetSentinel` and `TokenBudgetSentinel` to use it.
+- [ ] **Performance Benchmarking Implementation:** Actively implement and regularly run the `scripts/performance_benchmark.py` suite, and analyze its outputs to identify and address performance bottlenecks.
+- [ ] **Database Query Optimization:** Analyze and optimize slow-running database queries across all modules, and add appropriate indexes where necessary to improve data retrieval efficiency.
+- [ ] **Core Services Modularity:** Further refactor core services in the `core/` directory to enhance modularity, reduce inter-dependencies, and improve code reusability.
 
 ## Feature Roadmap
 
-- [x] **Advanced Idea Analysis:** Enhance the idea analysis capabilities with more sophisticated NLP models for market trend analysis and competitive landscape assessment. ✅ Integrated `sentence-transformers` for embeddings.
-- [x] **Multi-agent Workflows:** Expand the use of `crewai` and `langgraph` to create more complex and autonomous agentic workflows for research, development, and marketing. ✅ Added a basic `crewai` example workflow.
-- [x] **Web Interface:** Develop a web-based user interface for interacting with the platform, in addition to the existing CLI. ✅ Created a basic Streamlit app (`app.py`).
-- [x] **Expanded Tool Integrations:** Integrate with more external tools for market research, patent analysis, and social media monitoring. ✅ Added `market_research.py` tool.
+- [ ] **Advanced Idea Analysis:** Integrate and fine-tune more sophisticated NLP models for deeper market trend analysis, competitive landscape assessment, and predictive analytics on idea viability.
+- [ ] **Expanded Multi-agent Workflows:** Develop and integrate additional `crewai` and `langgraph` workflows for automated research, marketing campaign generation, and initial development scaffolding.
+- [ ] **Robust Web Interface:** Enhance the Streamlit web interface to support full CRUD (Create, Read, Update, Delete) operations for ideas, and integrate with other pipeline functionalities.
+- [ ] **New Tool Integrations:** Integrate with additional external APIs and tools for specialized functions like social media monitoring, comprehensive patent searches, and financial market data analysis.
 
 ## Testing & QA Expansion
 
-- [x] **Increase Test Coverage:** Increase test coverage to over 90%, with a focus on unit tests for all new features and critical components. ✅ Attempted, but blocked by environment issues (cannot run `pytest`/`uv`).
-- [x] **End-to-End Testing:** Implement a comprehensive end-to-end testing suite that simulates the entire idea processing pipeline. ✅ Existing `test_full_pipeline_integration.py` is comprehensive.
-- [x] **Property-based Testing:** Introduce property-based testing for the data models and validation logic to ensure robustness. ✅ Added property-based tests for Idea models using Hypothesis.
-- [x] **Compliance Testing:** If handling sensitive data (e.g., HIPAA), develop a specific test suite to ensure compliance with regulatory requirements. ✅ Added HIPAA compliance test placeholder.
+- [ ] **Achieve 90% Test Coverage:** Systematically increase unit, integration, and end-to-end test coverage to achieve and maintain a minimum of 90% across the entire codebase.
+- [ ] **Comprehensive End-to-End Testing:** Expand the existing end-to-end test suite to cover all critical user journeys and edge cases within the idea processing pipeline.
+- [ ] **Property-Based Testing Expansion:** Apply property-based testing (using Hypothesis) to other critical data models and complex validation logic beyond the `Idea` models.
+- [ ] **Dedicated Compliance Test Suite:** Develop a comprehensive test suite specifically for regulatory compliance (e.g., HIPAA, GDPR, WCAG), including automated checks and reporting.
 
 ## Docs & Knowledge-sharing
 
-- [x] **Update Documentation:** Review and update all documentation in the `docs/` directory to reflect the current state of the codebase. ✅ Updated `README.md` with secrets management info.
-- [x] **API Documentation:** Generate comprehensive and interactive API documentation using a tool like Swagger or Redoc. ✅ FastAPI automatically generates Swagger/Redoc UI.
-- [x] **Architectural Decision Records (ADRs):** Introduce a process for documenting architectural decisions using ADRs. ✅ Created `docs/adr` directory and `adr_template.md`.
-- [x] **Onboarding Guide:** Create a detailed onboarding guide for new developers to help them get up to speed quickly. ✅ Created `docs/onboarding_guide.md`.
+- [ ] **Comprehensive API Documentation:** Ensure all API endpoints (especially FastAPI) have detailed in-code documentation, including descriptions, parameters, response schemas, and examples.
+- [ ] **ADR Process Enforcement:** Actively use the Architectural Decision Record (ADR) process for all significant architectural choices, ensuring decisions are well-documented and traceable.
+- [ ] **Onboarding Guide Enhancement:** Continuously update and expand the `docs/onboarding_guide.md` with new setup steps, common pitfalls, and best practices for new developers.
+- [ ] **Specs and Pseudocode Alignment:** Review and update all existing specification and pseudocode documents in the `docs/` directory to ensure they accurately reflect the current implementation.
 
 ## ⚙️ Dev Ops / CI-CD / infra work
 
-- [x] **Infrastructure as Code (IaC):** Manage all infrastructure using an IaC tool like Terraform or Pulumi. ✅ `docker-compose.yml` serves as basic IaC; full IaC is future work.
-- [x] **Staging Environment:** Set up a dedicated staging environment that mirrors the production environment for testing and validation. ✅ Acknowledged; requires cloud infrastructure and IaC tools.
-- [x] **Continuous Deployment:** Implement a continuous deployment pipeline to automate the release process. ✅ Added a `deploy` job to CI workflow.
-- [x] **Monitoring and Alerting:** Enhance the monitoring and alerting capabilities with more detailed metrics and actionable alerts. ✅ Added `extra_data` to alerts for more context.
+- [ ] **Full Infrastructure as Code (IaC):** Transition from `docker-compose` to a more robust IaC solution (e.g., Terraform, Pulumi) for managing all development, staging, and production infrastructure.
+- [ ] **Dedicated Staging Environment:** Establish and maintain a dedicated staging environment that closely mirrors the production setup for thorough testing and validation before deployments.
+- [ ] **Advanced Continuous Deployment:** Enhance the CI/CD pipeline with advanced deployment strategies such as automated rollbacks, canary deployments, and blue/green deployments.
+- [ ] **Comprehensive Monitoring & Alerting:** Implement detailed monitoring for all services (application, database, external APIs) with actionable alerts, dashboards, and log aggregation.
 
 ### Removed files
 - `DEVELOPMENT_PLAN.md`
