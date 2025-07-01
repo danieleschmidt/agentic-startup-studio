@@ -36,7 +36,7 @@ class AlertManager:
                 self.log_file_path = None  # Disable file logging
 
     def record_alert(
-        self, message: str, level: str = "WARNING", source: Optional[str] = None
+        self, message: str, level: str = "WARNING", source: Optional[str] = None, extra_data: Optional[Dict[str, Any]] = None
     ) -> None:
         """
         Records an alert: prints, logs to file (if configured), stores in memory.
@@ -50,6 +50,8 @@ class AlertManager:
 
         source_prefix = f"[{source}] " if source else ""
         formatted_alert = f"{timestamp} [{level.upper()}] {source_prefix}{message}"
+        if extra_data:
+            formatted_alert += f" | Data: {extra_data}"
 
         print(formatted_alert)  # Always print to console
         self.logged_alerts.append(formatted_alert)
@@ -85,12 +87,12 @@ if __name__ == "__main__":
     manager_with_file = AlertManager(log_file_path=demo_log_file)
 
     manager_with_file.record_alert(
-        "This is a warning.", level="WARNING", source="TestSystem"
+        "This is a warning.", level="WARNING", source="TestSystem", extra_data={"code": 101, "severity": "medium"}
     )
     manager_with_file.record_alert(
-        "Critical issue detected!", level="CRITICAL", source="CoreModule"
+        "Critical issue detected!", level="CRITICAL", source="CoreModule", extra_data={"component": "database", "error_code": 500}
     )
-    manager_with_file.record_alert("Just an FYI.", level="INFO")
+    manager_with_file.record_alert("Just an FYI.", level="INFO", extra_data={"event": "startup"})
 
     print(f"In-memory alerts: {manager_with_file.get_logged_alerts()}")
     log_path = manager_with_file.log_file_path

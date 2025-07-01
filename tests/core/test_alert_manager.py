@@ -38,21 +38,23 @@ def test_record_alert_console_output(alert_manager_no_file, capsys):
     message = "Test message"
     level = "INFO"
     source = "TestSource"
-    alert_manager_no_file.record_alert(message, level, source)
+    extra_data = {"key": "value"}
+    alert_manager_no_file.record_alert(message, level, source, extra_data=extra_data)
     captured = capsys.readouterr()
-    assert f"[{level.upper()}] [{source}] {message}" in captured.out
+    assert f"[{level.upper()}] [{source}] {message} | Data: {{'key': 'value'}}" in captured.out
     assert len(alert_manager_no_file.get_logged_alerts()) == 1
-    assert f"[{level.upper()}] [{source}] {message}" in alert_manager_no_file.get_logged_alerts()[0]
+    assert f"[{level.upper()}] [{source}] {message} | Data: {{'key': 'value'}}" in alert_manager_no_file.get_logged_alerts()[0]
 
 def test_record_alert_file_logging(alert_manager_with_file, mock_log_file_path):
     message = "File log test"
     level = "WARNING"
     source = "FileSource"
-    alert_manager_with_file.record_alert(message, level, source)
+    extra_data = {"file_key": "file_value"}
+    alert_manager_with_file.record_alert(message, level, source, extra_data=extra_data)
     
     with open(mock_log_file_path, "r", encoding="utf-8") as f:
         content = f.read()
-        assert f"[{level.upper()}] [{source}] {message}" in content
+        assert f"[{level.upper()}] [{source}] {message} | Data: {{'file_key': 'file_value'}}" in content
 
 def test_get_logged_alerts(alert_manager_no_file):
     alert_manager_no_file.record_alert("Alert 1")
@@ -71,11 +73,12 @@ def test_clear_logged_alerts(alert_manager_no_file):
 def test_record_alert_no_source(alert_manager_no_file, capsys):
     message = "No source test"
     level = "ERROR"
-    alert_manager_no_file.record_alert(message, level=level)
+    extra_data = {"no_source_key": "no_source_value"}
+    alert_manager_no_file.record_alert(message, level=level, extra_data=extra_data)
     captured = capsys.readouterr()
-    assert f"[{level.upper()}] {message}" in captured.out
+    assert f"[{level.upper()}] {message} | Data: {{'no_source_key': 'no_source_value'}}" in captured.out
     assert len(alert_manager_no_file.get_logged_alerts()) == 1
-    assert f"[{level.upper()}] {message}" in alert_manager_no_file.get_logged_alerts()[0]
+    assert f"[{level.upper()}] {message} | Data: {{'no_source_key': 'no_source_value'}}" in alert_manager_no_file.get_logged_alerts()[0]
 
 def test_log_file_creation_failure(capsys):
     with patch('os.makedirs') as mock_makedirs:

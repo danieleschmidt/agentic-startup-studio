@@ -50,3 +50,22 @@ jobs:
           REDIS_URL: redis://localhost:6379
         run: |
           pytest -q
+
+  deploy:
+    runs-on: ubuntu-latest
+    needs: build
+    if: github.ref == 'refs/heads/main'
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: your-build-artifact
+          path: ./dist
+
+      - name: Deploy to production (placeholder)
+        run: |
+          echo "Deploying application to production..."
+          # Add your deployment commands here (e.g., kubectl apply, aws deploy, gcloud run deploy)
+          echo "Deployment complete!"
