@@ -27,6 +27,7 @@ from pipeline.services.campaign_generator import get_campaign_generator, MVPType
 
 # Configuration and utilities
 from pipeline.config.settings import get_settings
+from pipeline.config.cache_manager import get_cache_manager, cache_result
 from pipeline.ingestion.idea_manager import create_idea_manager
 from pipeline.ingestion.validators import create_validator
 
@@ -76,17 +77,38 @@ class MainPipeline:
         # These will be initialized async in execute_full_pipeline
         self.idea_manager = None
         self.startup_validator = None
+        self.cache_manager = None
         
         # Execution tracking
         self.current_execution_id = ""
         self.execution_start_time = None
     
     async def _initialize_async_dependencies(self):
-        """Initialize async dependencies."""
+        """Initialize async dependencies in parallel."""
+        # Initialize dependencies concurrently for better performance
+        tasks = []
+        
         if self.idea_manager is None:
-            self.idea_manager = await create_idea_manager()
+            tasks.append(self._init_idea_manager())
         if self.startup_validator is None:
-            self.startup_validator = await create_validator()
+            tasks.append(self._init_validator())
+        if self.cache_manager is None:
+            tasks.append(self._init_cache_manager())
+        
+        if tasks:
+            await asyncio.gather(*tasks)
+    
+    async def _init_idea_manager(self):
+        """Initialize idea manager."""
+        self.idea_manager = await create_idea_manager()
+    
+    async def _init_validator(self):
+        """Initialize startup validator."""
+        self.startup_validator = await create_validator()
+    
+    async def _init_cache_manager(self):
+        """Initialize cache manager."""
+        self.cache_manager = await get_cache_manager()
     
     async def execute_full_pipeline(
         self,
@@ -140,7 +162,11 @@ class MainPipeline:
                 await self._execute_phase_3(startup_idea, target_investor, result)
                 
                 # Phase 4: Data Output (Campaign and MVP Generation)
-                await self._execute_phase_4(startup_idea, generate_mvp, result)
+                # Campaign and MVP can be generated in parallel if MVP is requested
+                if generate_mvp and result.pitch_deck_result:
+                    await self._execute_phase_4_parallel(startup_idea, result)
+                else:
+                    await self._execute_phase_4(startup_idea, generate_mvp, result)
                 
                 # Calculate final metrics
                 await self._calculate_final_metrics(result)
@@ -226,13 +252,28 @@ class MainPipeline:
                 )
             ]
             
-            # Collect evidence using RAG methodology
-            evidence_by_domain = await self.evidence_collector.collect_evidence(
-                claim=startup_idea,
-                research_domains=research_domains,
-                min_total_evidence=5,
-                timeout=120
-            )
+            # Check cache for evidence collection results
+            domain_names = [domain.name for domain in research_domains]
+            cache_key = f"evidence:{hash(startup_idea)}:{':'.join(sorted(domain_names))}"
+            
+            evidence_by_domain = None
+            if self.cache_manager:
+                evidence_by_domain = await self.cache_manager.get(cache_key)
+                if evidence_by_domain:
+                    self.logger.info("Using cached evidence collection results")
+            
+            # Collect evidence if not cached
+            if evidence_by_domain is None:
+                evidence_by_domain = await self.evidence_collector.collect_evidence(
+                    claim=startup_idea,
+                    research_domains=research_domains,
+                    min_total_evidence=5,
+                    timeout=120
+                )
+                
+                # Cache the results for 30 minutes
+                if self.cache_manager:
+                    await self.cache_manager.set(cache_key, evidence_by_domain, ttl_seconds=1800)
             
             result.evidence_collection_result = {
                 domain: [
@@ -387,6 +428,101 @@ class MainPipeline:
             result.phases_failed.append("phase_4_output")
             result.errors.append(f"Phase 4 failed: {str(e)}")
             self.logger.error(f"Phase 4 execution failed: {e}")
+    
+    async def _execute_phase_4_parallel(self, startup_idea: str, result: PipelineResult) -> None:
+        """Execute Phase 4 with parallel campaign and MVP generation."""
+        self.logger.info("Executing Phase 4: Parallel Campaign and MVP Generation")
+        
+        try:
+            # Prepare tasks for parallel execution
+            tasks = []
+            
+            # Campaign generation task
+            if hasattr(result, '_pitch_deck_object'):
+                tasks.append(self._generate_campaign(result))
+            
+            # MVP generation task
+            tasks.append(self._generate_mvp(startup_idea, result))
+            
+            # Execute both tasks in parallel
+            if tasks:
+                campaign_result, mvp_result = await asyncio.gather(*tasks, return_exceptions=True)
+                
+                # Handle campaign result
+                if not isinstance(campaign_result, Exception):
+                    result.campaign_result = campaign_result
+                else:
+                    result.errors.append(f"Campaign generation failed: {campaign_result}")
+                
+                # Handle MVP result
+                if not isinstance(mvp_result, Exception):
+                    result.mvp_result = mvp_result
+                else:
+                    result.errors.append(f"MVP generation failed: {mvp_result}")
+            
+            result.phases_completed.append("phase_4_output")
+            self.logger.info("Phase 4 parallel execution completed successfully")
+            
+        except Exception as e:
+            result.phases_failed.append("phase_4_output")
+            result.errors.append(f"Phase 4 parallel execution failed: {str(e)}")
+            self.logger.error(f"Phase 4 parallel execution failed: {e}")
+    
+    async def _generate_campaign(self, result: PipelineResult) -> Dict[str, Any]:
+        """Generate smoke test campaign."""
+        campaign = await self.campaign_generator.generate_smoke_test_campaign(
+            pitch_deck=result._pitch_deck_object,
+            budget_limit=25.0,
+            duration_days=7
+        )
+        
+        executed_campaign = await self.campaign_generator.execute_campaign(campaign)
+        
+        return {
+            'name': executed_campaign.name,
+            'type': executed_campaign.campaign_type.value,
+            'status': executed_campaign.status.value,
+            'budget_limit': executed_campaign.budget_limit,
+            'asset_count': len(executed_campaign.assets),
+            'relevance_score': executed_campaign.relevance_score,
+            'engagement_prediction': executed_campaign.engagement_prediction,
+            'google_ads_id': executed_campaign.google_ads_campaign_id,
+            'posthog_project_id': executed_campaign.posthog_project_id,
+            'landing_page_url': executed_campaign.landing_page_url
+        }
+    
+    async def _generate_mvp(self, startup_idea: str, result: PipelineResult) -> Dict[str, Any]:
+        """Generate MVP."""
+        startup_name = result.pitch_deck_result.get('startup_name', 'Startup') if result.pitch_deck_result else 'Startup'
+        
+        mvp_request = MVPRequest(
+            mvp_type=MVPType.LANDING_PAGE,
+            startup_name=startup_name,
+            description=startup_idea,
+            key_features=[
+                "User registration and authentication",
+                "Core product demonstration",
+                "Contact and feedback collection"
+            ],
+            target_platforms=["web"],
+            tech_stack=["python", "flask", "html", "css", "javascript"]
+        )
+        
+        mvp_result = await self.campaign_generator.generate_mvp(
+            mvp_request=mvp_request,
+            max_cost=4.0
+        )
+        
+        return {
+            'type': mvp_result.mvp_type.value,
+            'file_count': len(mvp_result.generated_files),
+            'deployment_url': mvp_result.deployment_url,
+            'generation_status': mvp_result.generation_status,
+            'deployment_status': mvp_result.deployment_status,
+            'code_quality_score': mvp_result.code_quality_score,
+            'deployment_success': mvp_result.deployment_success,
+            'generation_cost': mvp_result.generation_cost
+        }
     
     async def _calculate_final_metrics(self, result: PipelineResult) -> None:
         """Calculate final pipeline quality and budget metrics."""

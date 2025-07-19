@@ -1,7 +1,7 @@
 # core/alert_manager.py
 import datetime
 import os
-from typing import Optional, List  # Added Any for potential future use
+from typing import Optional, List, Dict, Any
 
 
 class AlertManager:
