@@ -84,8 +84,24 @@ class DatabaseManager:
         self.embedding_service = EmbeddingService(config)
     
     async def initialize(self) -> None:
-        """Initialize database connection pool and schema."""
+        """Initialize database connection pool and schema with security hardening."""
         try:
+            # Build SSL context if SSL is enabled
+            ssl_context = None
+            if self.config.enable_ssl:
+                import ssl
+                ssl_context = ssl.create_default_context()
+                
+                # Configure SSL based on mode
+                if self.config.ssl_mode == "disable":
+                    ssl_context = None
+                elif self.config.ssl_mode in ["require", "prefer"]:
+                    ssl_context.check_hostname = False
+                    ssl_context.verify_mode = ssl.CERT_NONE
+                elif self.config.ssl_mode in ["verify-ca", "verify-full"]:
+                    ssl_context.check_hostname = (self.config.ssl_mode == "verify-full")
+                    ssl_context.verify_mode = ssl.CERT_REQUIRED
+            
             self.pool = await asyncpg.create_pool(
                 host=self.config.host,
                 port=self.config.port,
@@ -94,7 +110,13 @@ class DatabaseManager:
                 database=self.config.database,
                 min_size=self.config.min_connections,
                 max_size=self.config.max_connections,
-                command_timeout=self.config.timeout
+                command_timeout=self.config.timeout,
+                ssl=ssl_context,
+                max_inactive_connection_lifetime=self.config.connection_lifetime,
+                server_settings={
+                    'statement_timeout': f'{self.config.statement_timeout}s',
+                    'log_statement': 'all' if self.config.enable_query_logging else 'none'
+                }
             )
             
             await self._ensure_schema_exists()
@@ -122,6 +144,81 @@ class DatabaseManager:
             except Exception as e:
                 logger.error(f"Database operation failed: {e}")
                 raise
+    
+    def _validate_query_params(self, query: str, params: tuple) -> None:
+        """
+        Validate query parameters for security.
+        
+        Args:
+            query: SQL query string
+            params: Query parameters tuple
+            
+        Raises:
+            QueryError: If query parameters are invalid or exceed limits
+        """
+        # Check parameter count limit
+        if len(params) > self.config.max_query_params:
+            raise QueryError(f"Query parameter count ({len(params)}) exceeds limit ({self.config.max_query_params})")
+        
+        # Check for potentially dangerous SQL keywords in dynamic parts
+        dangerous_keywords = ['DROP', 'DELETE', 'TRUNCATE', 'ALTER', 'CREATE', 'INSERT', 'UPDATE']
+        query_upper = query.upper()
+        
+        # Allow controlled use of these keywords in our application queries
+        # but log them for monitoring
+        for keyword in dangerous_keywords:
+            if keyword in query_upper and self.config.enable_query_logging:
+                logger.warning(f"Query contains {keyword} keyword", extra={"query_hash": hash(query)})
+        
+        # Validate parameter types and content
+        for i, param in enumerate(params):
+            if param is None:
+                continue
+                
+            # String parameters - check for injection patterns
+            if isinstance(param, str):
+                # Check for suspicious patterns
+                suspicious_patterns = [';--', '/*', '*/', 'union', 'select', 'drop', 'delete']
+                param_lower = param.lower()
+                for pattern in suspicious_patterns:
+                    if pattern in param_lower:
+                        logger.warning(f"Suspicious pattern '{pattern}' in parameter {i}: {param[:50]}")
+                        
+            # Ensure reasonable parameter size
+            if isinstance(param, (str, bytes)) and len(param) > 100000:  # 100KB limit
+                raise QueryError(f"Parameter {i} exceeds size limit (100KB)")
+    
+    async def execute_query(self, query: str, *params) -> str:
+        """
+        Execute a query with security validation.
+        
+        Args:
+            query: SQL query with placeholders
+            params: Query parameters
+            
+        Returns:
+            Query execution result
+        """
+        self._validate_query_params(query, params)
+        
+        async with self.get_connection() as conn:
+            return await conn.execute(query, *params)
+    
+    async def fetch_query(self, query: str, *params) -> list:
+        """
+        Fetch query results with security validation.
+        
+        Args:
+            query: SQL query with placeholders
+            params: Query parameters
+            
+        Returns:
+            Query results as list of records
+        """
+        self._validate_query_params(query, params)
+        
+        async with self.get_connection() as conn:
+            return await conn.fetch(query, *params)
     
     async def _ensure_schema_exists(self) -> None:
         """Ensure required database schema exists."""
