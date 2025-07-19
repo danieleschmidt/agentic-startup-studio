@@ -439,6 +439,13 @@ class IdeaRepository:
             where_clause = "WHERE " + " AND ".join(where_conditions) if where_conditions else ""
             order_direction = "DESC" if params.sort_desc else "ASC"
             
+            # Validate sort_by field to prevent SQL injection
+            allowed_sort_fields = {
+                "created_at", "updated_at", "title", "category", "status", "stage"
+            }
+            if params.sort_by not in allowed_sort_fields:
+                raise QueryError(f"Invalid sort field: {params.sort_by}. Allowed fields: {allowed_sort_fields}")
+            
             query = f"""
                 SELECT * FROM ideas 
                 {where_clause}

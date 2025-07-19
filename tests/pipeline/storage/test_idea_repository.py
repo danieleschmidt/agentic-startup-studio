@@ -431,6 +431,28 @@ class TestIdeaRepository:
         assert "OFFSET" in query_call[0]
     
     @pytest.mark.asyncio
+    @pytest.mark.security
+    async def test_when_invalid_sort_field_then_raises_query_error(self, repository, mock_db_manager):
+        """Given malicious sort_by parameter, when finding with filters, then raises QueryError to prevent SQL injection."""
+        # Test SQL injection attempt via sort_by field
+        malicious_params = QueryParams(
+            sort_by="created_at; DROP TABLE ideas; --",  # SQL injection attempt
+            limit=10
+        )
+        
+        with pytest.raises(QueryError, match="Invalid sort field"):
+            await repository.find_with_filters(malicious_params)
+        
+        # Test another injection vector
+        malicious_params2 = QueryParams(
+            sort_by="(SELECT password FROM users)",  # Subquery injection attempt
+            limit=10
+        )
+        
+        with pytest.raises(QueryError, match="Invalid sort field"):
+            await repository.find_with_filters(malicious_params2)
+    
+    @pytest.mark.asyncio
     async def test_when_find_similar_by_embedding_then_performs_vector_search(self, repository, mock_db_manager):
         """Given description text, when finding similar ideas, then performs vector similarity search."""
         mock_conn = AsyncMock()
