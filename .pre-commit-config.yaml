@@ -1,21 +1,67 @@
-# See https://pre-commit.com for more information
-# See https://pre-commit.com/hooks.html for more hooks
-repos:
--   repo: https://github.com/pre-commit/pre-commit-hooks
-    rev: v4.6.0 # Use the latest version
-    hooks:
-    -   id: trailing-whitespace
-    -   id: end-of-file-fixer
-    -   id: check-yaml
-    -   id: check-toml
-    -   id: check-added-large-files
+# Pre-commit hooks for Agentic Startup Studio
+# Run: pre-commit install
+# Manual run: pre-commit run --all-files
 
--   repo: https://github.com/astral-sh/ruff-pre-commit
-    # Ruff version. Must be kept in sync with GitHub Actions CI.
-    # Find the latest ruff version at https://github.com/astral-sh/ruff/releases
-    rev: v0.4.4 # Replace with a specific Ruff version
+repos:
+  # Security scanning with Bandit
+  - repo: https://github.com/PyCQA/bandit
+    rev: '1.7.8'
     hooks:
-    -   id: ruff
-        args: [--fix, --exit-non-zero-on-fix] # Apply fixes and exit with error if fixes were made
-    -   id: ruff-format # If you want to use ruff for formatting as well
-        # args: [] # Add any specific formatting args if needed
+      - id: bandit
+        args: ['-r', 'pipeline/', 'core/', 'scripts/', '--severity-level', 'medium']
+        files: \.py$
+        exclude: tests/
+  
+  # Code formatting and linting
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.4.4
+    hooks:
+      - id: ruff
+        args: [--fix, --exit-non-zero-on-fix]
+      - id: ruff-format
+  
+  # Security and secrets scanning
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.4.0
+    hooks:
+      - id: detect-secrets
+        args: ['--baseline', '.secrets.baseline']
+        exclude: \.secrets\.baseline$
+  
+  # Custom security hooks
+  - repo: local
+    hooks:
+      # Secrets validation
+      - id: validate-secrets
+        name: Validate Production Secrets
+        entry: python scripts/validate_production_secrets.py
+        language: python
+        args: ['--scan-hardcoded', '--strict']
+        pass_filenames: false
+        files: \.py$
+        exclude: tests/
+      
+      # SQL injection prevention check
+      - id: sql-injection-check
+        name: Check for SQL Injection Vulnerabilities
+        entry: bash -c 'if grep -r "f\".*{.*}.*FROM\|f\".*{.*}.*WHERE\|f\".*{.*}.*ORDER BY" --include="*.py" pipeline/ core/ scripts/ | grep -v "# SQL injection safe"; then echo "❌ Potential SQL injection found. Use parameterized queries."; exit 1; fi'
+        language: system
+        pass_filenames: false
+        files: \.py$
+        exclude: tests/
+
+  # Standard hooks
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.6.0
+    hooks:
+      - id: trailing-whitespace
+      - id: end-of-file-fixer
+      - id: check-yaml
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+      - id: check-case-conflict
+      - id: check-symlinks
+      - id: debug-statements
