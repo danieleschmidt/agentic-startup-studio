@@ -55,9 +55,10 @@ class CacheableDuplicateDetector:
     def _generate_cache_key(self, draft: IdeaDraft) -> str:
         """Generate cache key for the draft."""
         # Simple cache key based on title and description hash
+        # Using SHA-256 for better security than MD5
         import hashlib
         content = f"{draft.title}:{draft.description}"
-        return f"duplicate_check:{hashlib.md5(content.encode()).hexdigest()}"
+        return f"duplicate_check:{hashlib.sha256(content.encode()).hexdigest()[:16]}"
     
     async def _perform_optimized_detection(self, draft: IdeaDraft) -> DuplicateCheckResult:
         """Perform optimized duplicate detection."""

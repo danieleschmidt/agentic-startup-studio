@@ -17,10 +17,8 @@ from enum import Enum
 from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 
-# START is not re-exported from langgraph.graph in some versions
-# so import it from the submodule where it is defined.
-from langgraph.graph import Graph
-from langgraph.graph.graph import END, START
+# LangGraph v0.5+ uses StateGraph instead of Graph
+from langgraph.graph import StateGraph, END, START
 
 from pipeline.config.settings import get_settings
 from pipeline.services.budget_sentinel import (
@@ -204,9 +202,19 @@ class PitchDeckGenerator:
             self.logger.error(f"Pitch deck generation failed: {e}")
             raise
 
-    def _build_workflow(self) -> Graph:
+    def _build_workflow(self) -> StateGraph:
         """Build LangGraph workflow for pitch deck generation."""
-        workflow = Graph()
+        from typing_extensions import TypedDict
+        
+        class PitchDeckState(TypedDict):
+            idea: object
+            investor_type: str
+            slides: list
+            current_slide: dict
+            quality_score: float
+            metadata: dict
+        
+        workflow = StateGraph(PitchDeckState)
 
         # Define workflow nodes
         workflow.add_node("prepare_generation", self._prepare_generation)

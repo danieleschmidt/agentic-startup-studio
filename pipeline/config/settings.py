@@ -3,17 +3,28 @@ Configuration management for data ingestion pipeline.
 
 This module provides environment-driven configuration with validation,
 defaults, and type safety for all pipeline components.
+
+For production environments, integrates with Google Cloud Secret Manager
+for secure secrets handling.
 """
 
 import logging
 import os
 from functools import lru_cache
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 logger = logging.getLogger(__name__)
+
+# Import secrets manager - handle gracefully if not available
+try:
+    from .secrets_manager import get_secrets_manager
+    SECRETS_MANAGER_AVAILABLE = True
+except ImportError:
+    SECRETS_MANAGER_AVAILABLE = False
+    logger.warning("Secrets manager not available - using environment variables only")
 
 
 class DatabaseConfig(BaseSettings):
@@ -29,6 +40,16 @@ class DatabaseConfig(BaseSettings):
     min_connections: int = Field(default=1, env="DB_MIN_CONNECTIONS")
     max_connections: int = Field(default=20, env="DB_MAX_CONNECTIONS")
     timeout: int = Field(default=30, env="DB_TIMEOUT")
+    
+    # Security settings
+    enable_ssl: bool = Field(default=True, env="DB_ENABLE_SSL")
+    ssl_mode: str = Field(default="require", env="DB_SSL_MODE")
+    connection_lifetime: int = Field(default=3600, env="DB_CONNECTION_LIFETIME")  # 1 hour
+    statement_timeout: int = Field(default=30, env="DB_STATEMENT_TIMEOUT")  # 30 seconds
+    
+    # Query security
+    max_query_params: int = Field(default=100, env="DB_MAX_QUERY_PARAMS")
+    enable_query_logging: bool = Field(default=False, env="DB_ENABLE_QUERY_LOGGING")
 
     # pgvector configuration
     vector_dimensions: int = Field(default=1536, env="VECTOR_DIMENSIONS")
@@ -56,6 +77,31 @@ class DatabaseConfig(BaseSettings):
         """Validate vector dimensions are reasonable."""
         if not 100 <= v <= 4096:
             raise ValueError("Vector dimensions must be between 100 and 4096")
+        return v
+
+    @field_validator('ssl_mode')
+    @classmethod
+    def validate_ssl_mode(cls, v):
+        """Validate SSL mode is supported."""
+        valid_modes = ['disable', 'allow', 'prefer', 'require', 'verify-ca', 'verify-full']
+        if v not in valid_modes:
+            raise ValueError(f"SSL mode must be one of: {valid_modes}")
+        return v
+
+    @field_validator('connection_lifetime', 'statement_timeout')
+    @classmethod
+    def validate_timeouts(cls, v):
+        """Validate timeout values are positive."""
+        if v <= 0:
+            raise ValueError("Timeout values must be positive")
+        return v
+
+    @field_validator('max_query_params')
+    @classmethod
+    def validate_max_query_params(cls, v):
+        """Validate max query params is reasonable."""
+        if not 1 <= v <= 1000:
+            raise ValueError("Max query params must be between 1 and 1000")
         return v
 
     def get_connection_url(self, include_password: bool = False) -> str:
@@ -441,23 +487,112 @@ class IngestionConfig(BaseSettings):
     )
 
 
+class SecureIngestionConfig(IngestionConfig):
+    """Enhanced configuration with secure secrets management for production."""
+    
+    def __init__(self, **kwargs):
+        """Initialize with secrets manager integration."""
+        super().__init__(**kwargs)
+        
+        # Initialize secrets manager if available and in production
+        self._secrets_manager = None
+        if SECRETS_MANAGER_AVAILABLE and self.environment == "production":
+            try:
+                self._secrets_manager = get_secrets_manager(self.environment)
+                logger.info("Initialized secure configuration with Google Cloud Secret Manager")
+                
+                # Validate required secrets are available
+                missing_secrets = self.validate_production_secrets()
+                if missing_secrets:
+                    raise ValueError(f"Missing required secrets: {', '.join(missing_secrets)}")
+                    
+            except Exception as e:
+                logger.error(f"Failed to initialize secrets manager: {e}")
+                logger.warning("Falling back to environment variables")
+    
+    def get_secret(self, secret_name: str, required: bool = False) -> Optional[str]:
+        """Get a secret value using the secrets manager."""
+        if self._secrets_manager:
+            return self._secrets_manager.get_secret(secret_name, required)
+        else:
+            # Fallback to environment variable
+            value = os.getenv(secret_name)
+            if required and not value:
+                raise ValueError(f"Required secret '{secret_name}' not found")
+            return value
+    
+    def get_database_password(self) -> str:
+        """Get database password securely."""
+        return self.get_secret("DB_PASSWORD", required=self.environment == "production") or ""
+    
+    def get_openai_api_key(self) -> str:
+        """Get OpenAI API key securely."""
+        return self.get_secret("OPENAI_API_KEY", required=True)
+    
+    def get_application_secret_key(self) -> str:
+        """Get application secret key securely."""
+        key = self.get_secret("SECRET_KEY", required=self.environment == "production")
+        if not key and self.environment != "production":
+            logger.warning("SECRET_KEY not set - using development default")
+            return "dev-secret-key-change-in-production"
+        return key
+    
+    def validate_production_secrets(self) -> list[str]:
+        """Validate all required secrets are available for production."""
+        if self.environment != "production":
+            return []
+        
+        required_secrets = [
+            "SECRET_KEY",
+            "DB_PASSWORD", 
+            "OPENAI_API_KEY"
+        ]
+        
+        missing = []
+        for secret in required_secrets:
+            if not self.get_secret(secret):
+                missing.append(secret)
+        
+        return missing
+
+
 @lru_cache
 def get_settings() -> IngestionConfig:
     """Get cached application settings.
 
     This function is cached to ensure settings are loaded only once and reused throughout the application lifecycle.
+    Uses SecureIngestionConfig for production environments with Google Cloud Secret Manager.
     """
     try:
-        settings = IngestionConfig()
-        logger.info(
-            f"Loaded configuration for environment: {settings.environment}",
-            extra={
-                "environment": settings.environment,
-                "debug_mode": settings.debug_mode,
-                "app_name": settings.app_name,
-                "version": settings.version
-            }
-        )
+        # Determine environment first
+        environment = os.getenv("ENVIRONMENT", "development").lower()
+        
+        # Use SecureIngestionConfig for production with secrets management
+        if environment == "production" and SECRETS_MANAGER_AVAILABLE:
+            settings = SecureIngestionConfig()
+            logger.info(
+                f"Loaded SECURE configuration for environment: {settings.environment}",
+                extra={
+                    "environment": settings.environment,
+                    "debug_mode": settings.debug_mode,
+                    "app_name": settings.app_name,
+                    "version": settings.version,
+                    "secrets_manager": "google_cloud"
+                }
+            )
+        else:
+            settings = IngestionConfig()
+            logger.info(
+                f"Loaded configuration for environment: {settings.environment}",
+                extra={
+                    "environment": settings.environment,
+                    "debug_mode": settings.debug_mode,
+                    "app_name": settings.app_name,
+                    "version": settings.version,
+                    "secrets_manager": "environment_variables"
+                }
+            )
+        
         return settings
     except Exception as e:
         logger.error(f"Failed to load configuration: {e}")

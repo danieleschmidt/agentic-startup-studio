@@ -456,7 +456,12 @@ class GoogleAdsAdapter(BaseAdapter):
             if not date_range:
                 date_range = {'start_date': 'LAST_30_DAYS', 'end_date': 'LAST_30_DAYS'}
             
-            # Build GAQL query
+            # Build GAQL query with parameterized values for security
+            # Validate date range to prevent injection
+            start_date = str(date_range['start_date']).replace("'", "").replace(";", "")
+            if not start_date.isalnum() and start_date not in ['LAST_7_DAYS', 'LAST_30_DAYS', 'LAST_90_DAYS']:
+                raise ValueError("Invalid date range format")
+            
             query = f"""
                 SELECT 
                     campaign.id,
@@ -470,12 +475,20 @@ class GoogleAdsAdapter(BaseAdapter):
                     metrics.conversions_per_click,
                     metrics.cost_per_conversion
                 FROM campaign
-                WHERE segments.date DURING {date_range['start_date']}
+                WHERE segments.date DURING {start_date}
             """
             
             if campaign_ids:
-                campaign_filter = "','".join(campaign_ids)
-                query += f" AND campaign.id IN ('{campaign_filter}')"
+                # Sanitize campaign IDs to prevent injection
+                sanitized_ids = []
+                for cid in campaign_ids:
+                    # Only allow numeric campaign IDs
+                    if str(cid).isdigit():
+                        sanitized_ids.append(str(cid))
+                
+                if sanitized_ids:
+                    campaign_filter = "','".join(sanitized_ids)
+                    query += f" AND campaign.id IN ('{campaign_filter}')"
             
             search_request = {
                 'query': query,

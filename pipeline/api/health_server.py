@@ -36,6 +36,11 @@ async def metrics() -> Response:
 
 
 if __name__ == "__main__":
+    import os
     import uvicorn
 
-    uvicorn.run(app, host="0.0.0.0", port=8000)
+    # Secure host binding - use environment variable or default to localhost
+    host = os.getenv("HOST_INTERFACE", "127.0.0.1")
+    port = int(os.getenv("PORT", "8000"))
+    
+    uvicorn.run(app, host=host, port=port)
