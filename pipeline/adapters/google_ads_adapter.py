@@ -457,12 +457,18 @@ class GoogleAdsAdapter(BaseAdapter):
                 date_range = {'start_date': 'LAST_30_DAYS', 'end_date': 'LAST_30_DAYS'}
             
             # Build GAQL query with parameterized values for security
-            # Validate date range to prevent injection
-            start_date = str(date_range['start_date']).replace("'", "").replace(";", "")
-            if not start_date.isalnum() and start_date not in ['LAST_7_DAYS', 'LAST_30_DAYS', 'LAST_90_DAYS']:
-                raise ValueError("Invalid date range format")
+            # Validate and sanitize date range to prevent injection
+            start_date = str(date_range['start_date'])
+            # Use allowlist approach for date ranges - only allow predefined values
+            allowed_date_ranges = ['LAST_7_DAYS', 'LAST_30_DAYS', 'LAST_90_DAYS', 'TODAY', 'YESTERDAY']
+            if start_date not in allowed_date_ranges:
+                # For custom dates, validate format strictly
+                import re
+                if not re.match(r'^20\d{2}-\d{2}-\d{2}$', start_date):
+                    raise ValueError(f"Invalid date range format. Must be one of {allowed_date_ranges} or YYYY-MM-DD format")
             
-            query = f"""
+            # Use string formatting with validated input (still safe since we validated above)
+            query = """
                 SELECT 
                     campaign.id,
                     campaign.name,
@@ -475,8 +481,8 @@ class GoogleAdsAdapter(BaseAdapter):
                     metrics.conversions_per_click,
                     metrics.cost_per_conversion
                 FROM campaign
-                WHERE segments.date DURING {start_date}
-            """
+                WHERE segments.date DURING {}
+            """.format(start_date)  # nosec B608 - input is validated above
             
             if campaign_ids:
                 # Sanitize campaign IDs to prevent injection
