@@ -243,6 +243,55 @@ class CircuitBreaker(Generic[T]):
             "last_failure_time": self.metrics.last_failure_time
         }
     
+    def get_stats(self) -> Dict[str, Any]:
+        """Get comprehensive circuit breaker statistics."""
+        total_requests = self.metrics.total_requests
+        success_rate = (
+            self.metrics.total_successes / total_requests 
+            if total_requests > 0 else 0.0
+        )
+        
+        return {
+            "name": self.name,
+            "state": self.state.value,
+            "metrics": {
+                "total_requests": total_requests,
+                "total_successes": self.metrics.total_successes,
+                "total_failures": self.metrics.total_failures,
+                "current_failures": self.metrics.failure_count,
+                "current_successes": self.metrics.success_count,
+                "success_rate": success_rate,
+                "failure_rate": 1 - success_rate,
+                "last_failure_time": self.metrics.last_failure_time
+            },
+            "config": {
+                "failure_threshold": self.config.failure_threshold,
+                "recovery_timeout": self.config.recovery_timeout,
+                "success_threshold": self.config.success_threshold,
+                "timeout": self.config.timeout
+            }
+        }
+    
+    def reset(self) -> None:
+        """Reset circuit breaker metrics."""
+        self.metrics.reset()
+        logger.info(f"Circuit breaker '{self.name}' metrics reset")
+    
+    def _open_circuit(self) -> None:
+        """Force circuit to open state (for testing)."""
+        self.state = CircuitBreakerState.OPEN
+        self.metrics.last_failure_time = time.time()
+    
+    def _close_circuit(self) -> None:
+        """Force circuit to closed state (for testing)."""
+        self.state = CircuitBreakerState.CLOSED
+        self.metrics.reset()
+    
+    def _half_open_circuit(self) -> None:
+        """Force circuit to half-open state (for testing)."""
+        self.state = CircuitBreakerState.HALF_OPEN
+        self.metrics.reset()
+    
     @asynccontextmanager
     async def context(self):
         """Context manager for circuit breaker operations."""
