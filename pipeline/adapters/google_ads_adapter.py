@@ -359,7 +359,15 @@ class GoogleAdsAdapter(BaseAdapter):
             """
             
             if status_filter:
-                query += f" AND campaign.status = '{status_filter.value}'"
+                # Validate status_filter is from the CampaignStatus enum to prevent injection
+                if not isinstance(status_filter, CampaignStatus):
+                    raise ValueError(f"Invalid status filter type: {type(status_filter)}")
+                # Use parameterized approach with validated enum value
+                allowed_statuses = ['ENABLED', 'PAUSED', 'REMOVED']
+                if status_filter.value in allowed_statuses:
+                    query += f" AND campaign.status = '{status_filter.value}'"  # Safe: validated enum
+                else:
+                    raise ValueError(f"Invalid status filter value: {status_filter.value}")
             
             search_request = {
                 'query': query,
@@ -493,8 +501,13 @@ class GoogleAdsAdapter(BaseAdapter):
                         sanitized_ids.append(str(cid))
                 
                 if sanitized_ids:
+                    # Additional validation: ensure all IDs are numeric strings
+                    for campaign_id in sanitized_ids:
+                        if not campaign_id.isdigit():
+                            raise ValueError(f"Invalid campaign ID format: {campaign_id}")
+                    # Safe construction using validated numeric IDs
                     campaign_filter = "','".join(sanitized_ids)
-                    query += f" AND campaign.id IN ('{campaign_filter}')"
+                    query += f" AND campaign.id IN ('{campaign_filter}')"  # Safe: validated numeric IDs
             
             search_request = {
                 'query': query,
