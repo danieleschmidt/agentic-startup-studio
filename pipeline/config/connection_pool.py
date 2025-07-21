@@ -155,11 +155,14 @@ class ConnectionPoolManager:
         # Build URL from components
         host = getattr(self.settings, 'db_host', 'localhost')
         port = getattr(self.settings, 'db_port', 5432)
-        database = getattr(self.settings, 'db_name', 'startup_studio')
+        database = getattr(self.settings, 'db_database', 'startup_studio')
         username = getattr(self.settings, 'db_username', 'postgres')
         password = getattr(self.settings, 'db_password', '')
         
-        return f"postgresql://{username}:{password}@{host}:{port}/{database}"
+        if password:
+            return f"postgresql://{username}:{password}@{host}:{port}/{database}"
+        else:
+            return f"postgresql://{username}@{host}:{port}/{database}"
     
     @asynccontextmanager
     async def get_connection(self):
@@ -340,6 +343,75 @@ class ConnectionPoolManager:
                 failed_queries=self.stats['failed_queries'],
                 avg_query_time=0.0
             )
+    
+    async def execute_many(self, queries: List[tuple]) -> None:
+        """Execute multiple queries efficiently."""
+        if not queries:
+            return
+        
+        start_time = datetime.utcnow()
+        
+        try:
+            async with self.get_connection() as conn:
+                if self.async_pool_available:
+                    # Use asyncpg transaction for batch execution
+                    async with conn.transaction():
+                        for query, params in queries:
+                            if params:
+                                await conn.execute(query, *params)
+                            else:
+                                await conn.execute(query)
+                else:
+                    # Use psycopg2 batch execution
+                    cursor = conn.cursor()
+                    try:
+                        for query, params in queries:
+                            if params:
+                                cursor.execute(query, params)
+                            else:
+                                cursor.execute(query)
+                        conn.commit()
+                    finally:
+                        cursor.close()
+            
+            # Update statistics
+            query_time = (datetime.utcnow() - start_time).total_seconds()
+            self.stats['total_queries'] += len(queries)
+            self.stats['query_times'].append(query_time)
+            
+        except Exception as e:
+            self.stats['failed_queries'] += len(queries)
+            self.logger.error(f"Batch execution failed: {e}")
+            raise
+    
+    async def health_check(self) -> bool:
+        """Check if the connection pool is healthy."""
+        try:
+            async with self.get_connection() as conn:
+                if self.async_pool_available:
+                    result = await conn.fetchval("SELECT 1")
+                else:
+                    cursor = conn.cursor()
+                    try:
+                        cursor.execute("SELECT 1")
+                        result = cursor.fetchone()[0]
+                    finally:
+                        cursor.close()
+                
+                return result == 1
+        except Exception as e:
+            self.logger.error(f"Health check failed: {e}")
+            return False
+    
+    def reset_stats(self) -> None:
+        """Reset connection pool statistics."""
+        self.stats = {
+            'total_queries': 0,
+            'failed_queries': 0,
+            'query_times': [],
+            'created_at': datetime.utcnow()
+        }
+        self.logger.info("Connection pool statistics reset")
     
     async def close(self):
         """Close all connections and cleanup."""
