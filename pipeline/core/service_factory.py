@@ -108,6 +108,16 @@ class ServiceFactory:
         from pipeline.services.evidence_collector import EvidenceCollector
         from pipeline.services.pitch_deck_generator import PitchDeckGenerator
         from pipeline.services.campaign_generator import CampaignGenerator
+        from pipeline.services.claude_code_service import ClaudeCodeService
+        
+        # Claude Code Service (high priority if enabled)
+        if self.settings.claude_code.enabled:
+            self.registry.register_service(
+                service_type=ClaudeCodeService,
+                service_id="claude_code_service",
+                dependencies=["cache_manager"],
+                startup_priority=35
+            )
         
         # Budget Sentinel (high priority - controls spending)
         self.registry.register_service(
@@ -225,6 +235,13 @@ class ServiceFactory:
         """Get main pipeline executor."""
         return await self.registry.get_service("main_pipeline")
     
+    async def get_claude_code_service(self):
+        """Get Claude Code service if enabled."""
+        if self.settings.claude_code.enabled:
+            from pipeline.services.claude_code_service import ClaudeCodeService
+            return await self.registry.get_service("claude_code_service")
+        return None
+    
     async def get_service_by_interface(self, interface_type: Type[T]) -> T:
         """Get service by interface type."""
         return await self.registry.get_service_by_type(interface_type)
@@ -310,6 +327,9 @@ class ServiceContainer:
     
     async def pipeline_executor(self) -> IPipelineExecutor:
         return await self.factory.get_pipeline_executor()
+    
+    async def claude_code_service(self):
+        return await self.factory.get_claude_code_service()
 
 
 # Singleton factory instance

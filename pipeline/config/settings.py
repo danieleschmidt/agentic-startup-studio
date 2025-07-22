@@ -176,6 +176,64 @@ class ValidationConfig(BaseSettings):
     model_config = SettingsConfigDict(env_prefix="", case_sensitive=False)
 
 
+class ClaudeCodeConfig(BaseSettings):
+    """Configuration for Claude Code Max Plan compute capabilities."""
+    
+    # Enable/disable Claude Code
+    enabled: bool = Field(default=False, env="CLAUDE_CODE_ENABLED")
+    plan: str = Field(default="standard", env="CLAUDE_CODE_PLAN")
+    
+    # API configuration
+    api_key: str = Field(default="", env="CLAUDE_CODE_API_KEY")
+    model: str = Field(default="claude-opus-4-20250514", env="CLAUDE_CODE_MODEL")
+    max_tokens: int = Field(default=4096, env="CLAUDE_CODE_MAX_TOKENS")
+    
+    # Compute configuration (Max Plan features)
+    compute_enabled: bool = Field(default=False, env="CLAUDE_CODE_COMPUTE_ENABLED")
+    compute_timeout: int = Field(default=300, env="CLAUDE_CODE_COMPUTE_TIMEOUT")  # seconds
+    compute_max_memory: int = Field(default=8192, env="CLAUDE_CODE_COMPUTE_MAX_MEMORY")  # MB
+    compute_max_cpu: int = Field(default=4, env="CLAUDE_CODE_COMPUTE_MAX_CPU")  # cores
+    
+    @field_validator('plan')
+    @classmethod
+    def validate_plan(cls, v):
+        """Validate Claude Code plan type."""
+        valid_plans = ['standard', 'pro', 'max']
+        if v.lower() not in valid_plans:
+            raise ValueError(f"Plan must be one of: {valid_plans}")
+        return v.lower()
+    
+    @field_validator('compute_timeout')
+    @classmethod
+    def validate_compute_timeout(cls, v):
+        """Validate compute timeout is reasonable."""
+        if not 10 <= v <= 3600:  # 10 seconds to 1 hour
+            raise ValueError("Compute timeout must be between 10 and 3600 seconds")
+        return v
+    
+    @field_validator('compute_max_memory')
+    @classmethod
+    def validate_compute_memory(cls, v):
+        """Validate compute memory allocation."""
+        if not 512 <= v <= 32768:  # 512MB to 32GB
+            raise ValueError("Compute memory must be between 512 and 32768 MB")
+        return v
+    
+    @field_validator('compute_max_cpu')
+    @classmethod
+    def validate_compute_cpu(cls, v):
+        """Validate CPU core allocation."""
+        if not 1 <= v <= 16:
+            raise ValueError("CPU cores must be between 1 and 16")
+        return v
+    
+    def is_max_plan(self) -> bool:
+        """Check if Max Plan features are available."""
+        return self.plan == 'max' and self.compute_enabled
+    
+    model_config = SettingsConfigDict(env_prefix="", case_sensitive=False)
+
+
 class EmbeddingConfig(BaseSettings):
     """Configuration for text embedding and vector operations."""
 
@@ -419,6 +477,7 @@ class IngestionConfig(BaseSettings):
     budget: BudgetConfig = BudgetConfig()
     investor: InvestorConfig = Field(default_factory=InvestorConfig)
     infrastructure: InfrastructureConfig = InfrastructureConfig()
+    claude_code: ClaudeCodeConfig = ClaudeCodeConfig()
 
     # Application settings
     app_name: str = Field(default="agentic-startup-studio", env="APP_NAME")
@@ -700,3 +759,8 @@ def get_budget_config() -> BudgetConfig:
 def get_infrastructure_config() -> InfrastructureConfig:
     """Get infrastructure configuration."""
     return get_settings().infrastructure
+
+
+def get_claude_code_config() -> ClaudeCodeConfig:
+    """Get Claude Code configuration."""
+    return get_settings().claude_code
