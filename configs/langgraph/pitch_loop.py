@@ -295,17 +295,81 @@ def investor_review_node(state: GraphState) -> Dict[str, Any]:
     print(f"  Investor Feedback: {feedback_items}")
     print(f"  Funding Score: {final_score}")
 
-    # TODO: Add actual Gemini Pro call here for more nuanced review.
-    # qualitative_feedback = call_gemini_pro_investor_agent(...)
-    # feedback_items.extend(qualitative_feedback)
-
     INVESTOR_REVIEW_COST = 250
+    GEMINI_REVIEW_COST = 300  # Additional cost for Gemini Pro analysis
     current_total_tokens = state.get("total_tokens_consumed", 0)
     budget_already_exceeded = state.get("token_budget_exceeded", False)
+    
+    # Generate qualitative feedback using Gemini Pro
+    gemini_feedback_added = False
+    try:
+        from core.gemini_investor_reviewer import call_gemini_pro_investor_agent
+        import asyncio
+        
+        # Check if we have budget for Gemini analysis
+        total_cost_with_gemini = current_total_tokens + INVESTOR_REVIEW_COST + GEMINI_REVIEW_COST
+        if token_sentinel.check_usage(total_cost_with_gemini, "Gemini Investor Review"):
+            print("  Generating AI-powered qualitative feedback...")
+            
+            # Run async function in the current event loop or create one
+            try:
+                loop = asyncio.get_event_loop()
+                if loop.is_running():
+                    # If loop is already running, create a task
+                    import concurrent.futures
+                    with concurrent.futures.ThreadPoolExecutor() as executor:
+                        future = executor.submit(
+                            asyncio.run,
+                            call_gemini_pro_investor_agent(
+                                deck_content, 
+                                vc_profile, 
+                                final_score, 
+                                feedback_items[:3]  # Pass first 3 feedback items as context
+                            )
+                        )
+                        qualitative_feedback = future.result(timeout=30)
+                else:
+                    qualitative_feedback = loop.run_until_complete(
+                        call_gemini_pro_investor_agent(
+                            deck_content, 
+                            vc_profile, 
+                            final_score, 
+                            feedback_items[:3]
+                        )
+                    )
+            except RuntimeError:
+                # No event loop, create one
+                qualitative_feedback = asyncio.run(
+                    call_gemini_pro_investor_agent(
+                        deck_content, 
+                        vc_profile, 
+                        final_score, 
+                        feedback_items[:3]
+                    )
+                )
+            
+            # Add qualitative feedback to the existing feedback
+            feedback_items.extend(qualitative_feedback)
+            print(f"  AI Qualitative Feedback: {len(qualitative_feedback)} items added")
+            gemini_feedback_added = True
+            
+        else:
+            print("  Skipping AI qualitative feedback due to token budget constraints")
+            feedback_items.append("Note: AI qualitative feedback skipped due to budget limits")
+            
+    except Exception as e:
+        print(f"  Warning: AI qualitative feedback failed: {e}")
+        feedback_items.append(f"Note: AI qualitative feedback unavailable ({str(e)[:50]})")
+        # Continue with rubric-only feedback
+    # Calculate final token usage including Gemini cost if used
+    total_step_cost = INVESTOR_REVIEW_COST
+    if gemini_feedback_added:
+        total_step_cost += GEMINI_REVIEW_COST
+    
     is_within_budget_for_step = token_sentinel.check_usage(
-        current_total_tokens + INVESTOR_REVIEW_COST, "Investor Review Node"
+        current_total_tokens + total_step_cost, "Investor Review Node"
     )
-    new_total_tokens = current_total_tokens + INVESTOR_REVIEW_COST
+    new_total_tokens = current_total_tokens + total_step_cost
     final_budget_exceeded_status = (
         budget_already_exceeded or not is_within_budget_for_step
     )
