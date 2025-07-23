@@ -1,0 +1,20 @@
+{
+    "idea_id": "test-idea-enhanced",
+    "idea_name": "Test Idea Test Idea Enhanced",
+    "campaign_id": "mock-gads-campaign-test-idea-test-idea-enhanced-smoke-test-campaign-3824",
+    "budget": 25.0,
+    "total_cost": 150.0,
+    "ctr": 0.1,
+    "conversions": 5,
+    "success_indicators": {
+        "ctr_target_met": true,
+        "budget_respected": false,
+        "conversions_achieved": true
+    },
+    "success_score": 0.6666666666666666,
+    "overall_success": false,
+    "roi_indicator": "GOOD",
+    "results_path": "/root/repo/smoke_tests/test-idea-enhanced",
+    "timestamp": "2025-07-23T22:46:49.529108",
+    "recommendations": []
+}

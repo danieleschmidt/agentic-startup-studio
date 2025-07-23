@@ -1,0 +1,19 @@
+{
+    "campaign_id": "mock-gads-campaign-validated-idea-12345678-smoke-test-campaign-8986",
+    "impressions": 1000,
+    "clicks": 100,
+    "ctr": 0.1,
+    "conversions": 5,
+    "conversion_rate": 0.05,
+    "cost_per_click": 1.5,
+    "total_cost": 150.0,
+    "test_metadata": {
+        "idea_id": "12345678-1234-5678-9abc-123456789def",
+        "idea_name": "Validated Idea 12345678",
+        "campaign_id": "mock-gads-campaign-validated-idea-12345678-smoke-test-campaign-8986",
+        "budget": 50.0,
+        "dry_run": true,
+        "timestamp": "2025-07-23T22:47:08.799316",
+        "landing_page_url": "http://unbouncepages.com/mock-validated-idea-12345678-landing-page"
+    }
+}
