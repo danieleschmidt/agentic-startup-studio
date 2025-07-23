@@ -19,6 +19,7 @@ from sentence_transformers import SentenceTransformer
 from pipeline.config.cache_manager import get_cache_manager
 from pipeline.config.connection_pool import get_connection_pool, BatchProcessor
 from pipeline.config.settings import get_settings
+from pipeline.storage.vector_index_optimizer import VectorIndexOptimizer, IndexConfig, IndexType
 
 
 @dataclass
@@ -187,7 +188,7 @@ class OptimizedEmbeddingService:
 class OptimizedVectorSearch:
     """High-performance vector search engine with advanced optimizations."""
     
-    def __init__(self):
+    def __init__(self, index_config: Optional[IndexConfig] = None):
         self.settings = get_settings()
         self.logger = logging.getLogger(__name__)
         
@@ -195,6 +196,10 @@ class OptimizedVectorSearch:
         self.embedding_service = OptimizedEmbeddingService()
         self.pool_manager = None
         self.cache_manager = None
+        
+        # Advanced vector index optimization
+        self.index_optimizer = VectorIndexOptimizer(index_config)
+        self._index_initialized = False
         
         # Search configuration
         self.default_threshold = getattr(self.settings, 'vector_search_threshold', 0.7)
@@ -206,6 +211,7 @@ class OptimizedVectorSearch:
         self.use_parallel_search = getattr(self.settings, 'vector_parallel_search', True)
         self.enable_index_hints = getattr(self.settings, 'vector_index_hints', True)
         self.prefilter_enabled = getattr(self.settings, 'vector_prefilter', True)
+        self.enable_query_optimization = getattr(self.settings, 'vector_query_optimization', True)
         
         # Statistics
         self.stats = SearchStats()
@@ -216,8 +222,22 @@ class OptimizedVectorSearch:
         if self.enable_caching:
             self.cache_manager = await get_cache_manager()
         
+        # Initialize advanced vector index optimizer
+        await self.index_optimizer.initialize(self.pool_manager._pool)
+        self._index_initialized = True
+        
+        # Create optimized indexes if they don't exist
+        index_created = await self.index_optimizer.create_optimized_index()
+        if index_created:
+            self.logger.info("Vector indexes optimized successfully")
+        
         # Warm up embedding model
         await self.embedding_service.generate_embedding("test warmup text")
+        
+        # Get optimization recommendations
+        recommendations = self.index_optimizer.get_optimization_recommendations()
+        if recommendations:
+            self.logger.info(f"Vector search optimization recommendations: {recommendations}")
         
         self.logger.info("Optimized vector search engine initialized")
     
@@ -262,10 +282,26 @@ class OptimizedVectorSearch:
             # Generate query embedding
             query_embedding = await self.embedding_service.generate_embedding(query_text)
             
-            # Build optimized search query
-            search_query, query_params = self._build_search_query(
-                query_embedding, threshold, limit, exclude_ids, filters, include_metadata
-            )
+            # Use advanced query optimization if available
+            if self._index_initialized and self.enable_query_optimization:
+                # Get optimized query with execution plan
+                search_query, query_params, query_plan = await self.index_optimizer.optimize_query(
+                    embedding=query_embedding,
+                    threshold=threshold,
+                    limit=limit,
+                    exclude_ids=exclude_ids
+                )
+                
+                # Log query plan for debugging
+                self.logger.debug(
+                    f"Using optimized query plan: index={query_plan.use_index}, "
+                    f"cost={query_plan.estimated_cost:.2f}, workers={query_plan.parallel_workers}"
+                )
+            else:
+                # Fallback to basic query building
+                search_query, query_params = self._build_search_query(
+                    query_embedding, threshold, limit, exclude_ids, filters, include_metadata
+                )
             
             # Execute search
             results = await self._execute_search(search_query, query_params)
@@ -570,13 +606,20 @@ class OptimizedVectorSearch:
             }
         }
     
-    async def optimize_indexes(self):
+    async def optimize_indexes(self, force_rebuild: bool = False):
         """Optimize vector search indexes for better performance."""
         try:
-            # Analyze vector index performance
+            if self._index_initialized:
+                # Use advanced index optimizer
+                success = await self.index_optimizer.create_optimized_index(force_rebuild)
+                if success:
+                    self.logger.info("Advanced vector indexes optimized successfully")
+                    return True
+            
+            # Fallback to basic optimization
             analyze_query = """
                 ANALYZE idea_embeddings;
-                REINDEX INDEX idx_embeddings_vector;
+                REINDEX INDEX CONCURRENTLY idx_embeddings_vector;  -- Use concurrent reindex
             """
             
             await self.pool_manager.execute_query(analyze_query)
@@ -584,11 +627,69 @@ class OptimizedVectorSearch:
             # Update index statistics
             self.stats.index_usage_count += 1
             
-            self.logger.info("Vector search indexes optimized")
+            self.logger.info("Basic vector search indexes optimized")
+            return True
             
         except Exception as e:
             self.logger.error(f"Index optimization failed: {e}")
-            raise
+            return False
+    
+    async def maintain_indexes(self) -> bool:
+        """Perform routine index maintenance."""
+        if self._index_initialized:
+            return await self.index_optimizer.maintain_index()
+        else:
+            self.logger.warning("Advanced index optimizer not initialized - skipping maintenance")
+            return False
+    
+    async def benchmark_performance(self, test_queries: int = 50) -> Dict[str, float]:
+        """Benchmark vector search performance."""
+        if self._index_initialized:
+            return await self.index_optimizer.benchmark_performance(test_queries)
+        else:
+            self.logger.warning("Advanced index optimizer not initialized - cannot benchmark")
+            return {}
+    
+    def get_optimization_recommendations(self) -> List[str]:
+        """Get recommendations for improving vector search performance."""
+        if self._index_initialized:
+            return self.index_optimizer.get_optimization_recommendations()
+        else:
+            return ["Initialize advanced index optimizer for performance recommendations"]
+    
+    def get_index_stats(self) -> Dict[str, Any]:
+        """Get current index statistics and performance metrics."""
+        base_stats = {
+            'search_stats': {
+                'total_searches': self.stats.total_searches,
+                'cache_hits': self.stats.cache_hits,
+                'cache_misses': self.stats.cache_misses,
+                'avg_search_time_ms': self.stats.avg_search_time_ms,
+                'batch_searches': self.stats.batch_searches
+            },
+            'configuration': {
+                'default_threshold': self.default_threshold,
+                'max_results': self.max_results,
+                'caching_enabled': self.enable_caching,
+                'parallel_search': self.use_parallel_search,
+                'query_optimization_enabled': self.enable_query_optimization,
+                'cache_ttl_seconds': self.cache_ttl
+            }
+        }
+        
+        if self._index_initialized:
+            index_stats = self.index_optimizer.get_stats()
+            base_stats['index_stats'] = {
+                'index_type': index_stats.index_type,
+                'index_size_mb': index_stats.index_size_mb,
+                'total_vectors': index_stats.total_vectors,
+                'avg_query_time_ms': index_stats.avg_query_time_ms,
+                'index_selectivity': index_stats.index_selectivity,
+                'last_maintenance': index_stats.last_maintenance,
+                'queries_since_maintenance': index_stats.queries_since_maintenance
+            }
+        
+        return base_stats
 
 
 # Singleton instance
