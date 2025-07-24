@@ -12,7 +12,7 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from tools.web_rag import (
-    run, extract_content_async, extract_content_sync,
+    extract_content_async, extract_content_sync,
     WebRAGConfig, WebRAGExtractor, get_web_rag_extractor
 )
 
@@ -206,34 +206,6 @@ class TestWebRAGExtractor:
         assert result['metadata']['title'] == 'Fallback Test'
 
 
-class TestLegacyInterface:
-    """Test the legacy run() function."""
-    
-    @patch('tools.web_rag.get_web_rag_extractor')
-    def test_run_function_success(self, mock_get_extractor):
-        """Test successful run function call."""
-        mock_extractor = MagicMock()
-        mock_extractor.extract_sync.return_value = {
-            'content': 'Extracted content',
-            'success': True
-        }
-        mock_get_extractor.return_value = mock_extractor
-        
-        result = run("https://example.com")
-        
-        assert result == 'Extracted content'
-        mock_extractor.extract_sync.assert_called_once_with("https://example.com")
-    
-    @patch('tools.web_rag.get_web_rag_extractor')
-    def test_run_function_error_handling(self, mock_get_extractor):
-        """Test error handling in run function."""
-        mock_extractor = MagicMock()
-        mock_extractor.extract_sync.side_effect = Exception("Extraction error")
-        mock_get_extractor.return_value = mock_extractor
-        
-        result = run("https://example.com")
-        
-        assert result == ""  # Should return empty string on error
 
 
 class TestModernInterfaces:

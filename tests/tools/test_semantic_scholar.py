@@ -12,9 +12,8 @@ import os
 sys.path.append(os.path.join(os.path.dirname(__file__), '..', '..'))
 
 from tools.semantic_scholar import (
-    run, search_papers_async, get_paper_details_async,
-    SemanticScholarConfig, SemanticScholarAdapter,
-    _fallback_search
+    search_papers_async, get_paper_details_async,
+    SemanticScholarConfig, SemanticScholarAdapter
 )
 
 
@@ -83,90 +82,8 @@ class TestSemanticScholarAdapter:
         assert headers['User-Agent'] == 'Agentic-Startup-Studio/1.0'
 
 
-class TestFallbackSearch:
-    """Test the synchronous fallback search."""
-    
-    @patch('tools.semantic_scholar.requests.get')
-    def test_successful_search(self, mock_get):
-        """Test successful API call."""
-        # Mock response
-        mock_response = MagicMock()
-        mock_response.json.return_value = {
-            'data': [
-                {
-                    'paperId': '123',
-                    'title': 'Test Paper',
-                    'year': 2023,
-                    'citationCount': 10,
-                    'authors': [{'name': 'Test Author'}],
-                    'venue': 'Test Venue'
-                },
-                {
-                    'paperId': '456',
-                    'title': 'Low Citation Paper',
-                    'year': 2023,
-                    'citationCount': 2,  # Below threshold
-                    'authors': [{'name': 'Test Author 2'}],
-                    'venue': 'Test Venue 2'
-                }
-            ]
-        }
-        mock_response.raise_for_status.return_value = None
-        mock_get.return_value = mock_response
-        
-        results = _fallback_search("machine learning")
-        
-        # Should filter out low citation paper
-        assert len(results) == 1
-        assert results[0]['paperId'] == '123'
-        assert results[0]['citationCount'] == 10
-        
-        # Verify API call
-        mock_get.assert_called_once()
-        call_args = mock_get.call_args
-        assert 'machine learning' in str(call_args)
-    
-    @patch('tools.semantic_scholar.requests.get')
-    def test_api_error_handling(self, mock_get):
-        """Test API error handling."""
-        mock_get.side_effect = Exception("API Error")
-        
-        results = _fallback_search("test query")
-        
-        # Should return empty list on error
-        assert results == []
-    
-    @patch('tools.semantic_scholar.requests.get')
-    @patch.dict(os.environ, {'SEMANTIC_SCHOLAR_API_KEY': 'env-key'})
-    def test_api_key_from_environment(self, mock_get):
-        """Test API key retrieval from environment."""
-        mock_response = MagicMock()
-        mock_response.json.return_value = {'data': []}
-        mock_response.raise_for_status.return_value = None
-        mock_get.return_value = mock_response
-        
-        _fallback_search("test")
-        
-        # Check that API key was included in headers
-        call_args = mock_get.call_args
-        headers = call_args[1]['headers']
-        assert headers['x-api-key'] == 'env-key'
 
 
-class TestLegacyInterface:
-    """Test the legacy run() function."""
-    
-    @patch('tools.semantic_scholar._fallback_search')
-    def test_run_function_fallback(self, mock_fallback):
-        """Test run function using fallback when async unavailable."""
-        mock_fallback.return_value = [{'title': 'Test Paper'}]
-        
-        # Mock ASYNC_AVAILABLE as False
-        with patch('tools.semantic_scholar.ASYNC_AVAILABLE', False):
-            results = run("test query")
-        
-        assert results == [{'title': 'Test Paper'}]
-        mock_fallback.assert_called_once_with("test query")
 
 
 class TestErrorHandling:
@@ -180,16 +97,6 @@ class TestErrorHandling:
         assert config.paper_fields is not None
         assert len(config.paper_fields) == 10
     
-    def test_empty_response_handling(self):
-        """Test handling of empty API responses."""
-        with patch('tools.semantic_scholar.requests.get') as mock_get:
-            mock_response = MagicMock()
-            mock_response.json.return_value = {'data': []}
-            mock_response.raise_for_status.return_value = None
-            mock_get.return_value = mock_response
-            
-            results = _fallback_search("nonexistent topic")
-            assert results == []
 
 
 class TestRateLimiting:
