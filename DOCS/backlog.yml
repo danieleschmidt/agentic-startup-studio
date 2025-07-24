@@ -25,7 +25,7 @@ items:
     title: "Fix Agent Environment Setup Issues"
     description: "Agent context cannot execute Python, uv, or pytest commands, blocking all automated workflows"
     type: "Bug"
-    status: "NEW"
+    status: "DONE"
     priority: "P0"
     business_value: 13
     time_criticality: 13
@@ -93,7 +93,7 @@ items:
     title: "Implement HIPAA Compliance Testing Framework"
     description: "Currently skipped test requires dedicated HIPAA compliance checker implementation"
     type: "Feature"
-    status: "NEW"
+    status: "DONE"
     priority: "P1"
     business_value: 11
     time_criticality: 8
@@ -181,7 +181,7 @@ items:
     title: "Implement Complete Smoke Test Functionality"
     description: "run_smoke_test.py contains multiple placeholder steps instead of actual tests"
     type: "Feature"
-    status: "NEW"
+    status: "DONE"
     priority: "P2"
     business_value: 8
     time_criticality: 8
@@ -246,7 +246,7 @@ items:
     title: "Achieve 90% Test Coverage"
     description: "Increase test coverage from current ~60-70% to 90%+"
     type: "Quality"
-    status: "NEW"
+    status: "DONE"
     priority: "P2"
     business_value: 8
     time_criticality: 5
@@ -418,12 +418,12 @@ backlog_stats:
     Refactor: 2
     Documentation: 1
   by_status:
-    NEW: 12
+    NEW: 8
     REFINED: 0
     READY: 0
     DOING: 0
     PR: 0
-    DONE: 5
+    DONE: 9
     BLOCKED: 0
 
 execution_strategy:
