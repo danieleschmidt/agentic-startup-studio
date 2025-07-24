@@ -385,25 +385,6 @@ def get_web_rag_extractor() -> WebRAGExtractor:
     return _global_extractor
 
 
-# Legacy function interface for backward compatibility
-def run(url: str) -> str:
-    """
-    Legacy synchronous interface for backward compatibility.
-    
-    Args:
-        url: URL to extract content from
-        
-    Returns:
-        Extracted text content (for backward compatibility)
-    """
-    try:
-        extractor = get_web_rag_extractor()
-        result = extractor.extract_sync(url)
-        return result.get('content', '')
-    except Exception as e:
-        logger.error(f"Error in web RAG extraction: {e}")
-        return ""
-
 
 # Modern async interface
 async def extract_content_async(url: str, config: Optional[WebRAGConfig] = None) -> Dict[str, Any]:

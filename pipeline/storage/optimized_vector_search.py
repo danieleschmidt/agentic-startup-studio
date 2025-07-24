@@ -322,12 +322,23 @@ class OptimizedVectorSearch:
             if not cached_results:
                 self.stats.cache_misses += 1
             
+            # Performance monitoring for PERF-002 compliance
+            if search_time_ms > 50.0:
+                self.logger.warning(
+                    f"PERF-002 VIOLATION: Vector search took {search_time_ms:.2f}ms, "
+                    f"exceeds 50ms requirement. Query: {query[:100]}..."
+                )
+                # Consider triggering index optimization
+                if hasattr(self, 'index_optimizer') and self.index_optimizer:
+                    await self._schedule_index_optimization(search_time_ms)
+            
             # Add search time to results
             for result in search_results:
                 result.search_time_ms = search_time_ms
             
             self.logger.debug(
-                f"Vector search completed: {len(search_results)} results in {search_time_ms:.2f}ms"
+                f"Vector search completed: {len(search_results)} results in {search_time_ms:.2f}ms "
+                f"(Target: <50ms)"
             )
             
             return search_results
@@ -432,8 +443,8 @@ class OptimizedVectorSearch:
         filters: Optional[Dict[str, Any]],
         include_metadata: bool
     ) -> Tuple[str, List[Any]]:
-        """Build optimized PostgreSQL search query."""
-        # Base query with performance optimizations
+        """Build optimized PostgreSQL search query with sub-50ms performance focus."""
+        # Minimal field selection for maximum performance
         select_fields = [
             "i.idea_id",
             "1 - (e.description_embedding <=> $1) as similarity_score",
@@ -441,6 +452,7 @@ class OptimizedVectorSearch:
             "i.description"
         ]
         
+        # Only add metadata fields if explicitly requested to minimize data transfer
         if include_metadata:
             select_fields.extend([
                 "i.category",
@@ -690,6 +702,90 @@ class OptimizedVectorSearch:
             }
         
         return base_stats
+    
+    async def _schedule_index_optimization(self, query_time_ms: float) -> None:
+        """
+        Schedule index optimization when queries exceed 50ms threshold.
+        
+        Args:
+            query_time_ms: The slow query time that triggered this call
+        """
+        try:
+            if hasattr(self, 'index_optimizer') and self.index_optimizer:
+                # Check if we should reindex based on performance degradation
+                current_avg = self.stats.avg_search_time_ms
+                
+                # Trigger reindexing if average is consistently over 50ms
+                if current_avg > 50.0 and self.stats.total_searches > 100:
+                    self.logger.info(
+                        f"Scheduling index optimization due to performance degradation. "
+                        f"Average: {current_avg:.2f}ms, Current: {query_time_ms:.2f}ms"
+                    )
+                    
+                    # Schedule async index maintenance
+                    asyncio.create_task(self._optimize_indexes_async())
+                    
+        except Exception as e:
+            self.logger.error(f"Failed to schedule index optimization: {e}")
+    
+    async def _optimize_indexes_async(self) -> None:
+        """Perform asynchronous index optimization for better performance."""
+        try:
+            self.logger.info("Starting index optimization for PERF-002 compliance")
+            
+            if hasattr(self, 'index_optimizer') and self.index_optimizer:
+                # Get current index statistics
+                stats = await self.index_optimizer.get_index_stats()
+                
+                # Optimize if needed
+                if stats and stats.get('fragmentation', 0) > 0.3:
+                    await self.index_optimizer.optimize_indexes()
+                    self.logger.info("Index optimization completed")
+                else:
+                    self.logger.debug("Indexes are already optimized")
+                    
+        except Exception as e:
+            self.logger.error(f"Index optimization failed: {e}")
+    
+    def get_performance_report(self) -> Dict[str, Any]:
+        """
+        Generate performance report for PERF-002 compliance monitoring.
+        
+        Returns:
+            Dictionary with performance metrics and compliance status
+        """
+        compliance_status = "COMPLIANT" if self.stats.avg_search_time_ms < 50.0 else "NON_COMPLIANT"
+        
+        return {
+            "perf_002_compliance": {
+                "status": compliance_status,
+                "target_ms": 50.0,
+                "current_avg_ms": self.stats.avg_search_time_ms,
+                "total_searches": self.stats.total_searches,
+                "cache_hit_rate": (self.stats.cache_hits / max(self.stats.total_searches, 1)) * 100,
+                "performance_violations": max(0, self.stats.total_searches - sum(1 for _ in range(int(self.stats.total_searches)) if self.stats.avg_search_time_ms < 50.0))
+            },
+            "recommendations": self._get_performance_recommendations()
+        }
+    
+    def _get_performance_recommendations(self) -> List[str]:
+        """Get performance optimization recommendations."""
+        recommendations = []
+        
+        if self.stats.avg_search_time_ms > 50.0:
+            recommendations.append("Consider index optimization or reindexing")
+            
+        cache_hit_rate = (self.stats.cache_hits / max(self.stats.total_searches, 1)) * 100
+        if cache_hit_rate < 70.0:
+            recommendations.append("Increase cache TTL or cache size for better hit rates")
+            
+        if self.stats.total_searches > 1000 and not hasattr(self, 'index_optimizer'):
+            recommendations.append("Enable index optimizer for automatic performance tuning")
+            
+        if not recommendations:
+            recommendations.append("Performance is optimal - no changes needed")
+            
+        return recommendations
 
 
 # Singleton instance

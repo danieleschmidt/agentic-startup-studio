@@ -375,10 +375,6 @@ PORT=8000
         print(f"\n📝 For troubleshooting, check the log file:")
         print(f"   {self.log_file}")
 
-    def print_next_steps(self) -> None:
-        """Print post-setup instructions (legacy method for compatibility)"""
-        total_time = time.time() - self.start_time
-        self.print_setup_summary(total_time)
 
 def main():
     """Main setup function with comprehensive logging"""
