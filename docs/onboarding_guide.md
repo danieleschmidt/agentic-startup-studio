@@ -77,16 +77,29 @@ We adhere to high code quality standards:
     ```
 -   **Type Checking**: We use `mypy` for static type analysis.
 -   **Testing**: Aim for high test coverage. Run `pytest --cov=pipeline` to check coverage.
+    -   **Performance Testing**: PERF-002 compliance requires vector search queries <50ms. Run `python scripts/perf_002_validation.py` to validate performance.
 -   **Documentation**: All public APIs and complex logic should be documented.
+
+### Important: Removed Legacy Functions (2025 Update)
+
+⚠️ **Note for New Developers**: The following functions were removed in July 2025 as part of DEBT-001 cleanup:
+
+- ❌ `tools.web_rag.run()` → Use `extract_content_sync()` or `extract_content_async()`
+- ❌ `tools.semantic_scholar.run()` → Use `search_papers_async()` or modern interfaces  
+- ❌ `tools.semantic_scholar._fallback_search()` → Use the async adapter directly
+- ❌ `UVSetup.print_next_steps()` → Use `print_setup_summary()` directly
+
+If you see references to these functions in older documentation or tutorials, they are outdated.
 
 ### Contributing
 
 1.  **Fork the repository** and create a new branch for your feature or bug fix: `git checkout -b feature/your-feature-name`.
 2.  **Make your changes** and add/modify tests as relevant.
 3.  **Run tests** locally (`pytest`) to ensure everything passes.
-4.  **Ensure code quality** by running `ruff check .` and `black .`.
-5.  **Commit your changes** using [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
-6.  **Push your branch** and open a Pull Request.
+4.  **Run performance tests** (`python scripts/perf_002_validation.py`) if touching vector search code.
+5.  **Ensure code quality** by running `ruff check .` and `black .`.
+6.  **Commit your changes** using [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/).
+7.  **Push your branch** and open a Pull Request.
 
 ### Architectural Decision Records (ADRs)
 

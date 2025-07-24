@@ -239,6 +239,13 @@ CREATE EXTENSION IF NOT EXISTS vector;
 
 -- Verify setup
 SELECT * FROM pg_extension WHERE extname = 'vector';
+
+-- PERFORMANCE OPTIMIZATION (PERF-002 Compliance)
+-- Configure PostgreSQL for optimal vector search performance
+SET shared_preload_libraries = 'pg_stat_statements';
+SET effective_cache_size = '2GB';  -- Adjust based on available RAM
+SET maintenance_work_mem = '512MB';  -- For index building
+SET work_mem = '64MB';  -- For query operations
 ```
 
 ### 4. Run Database Migrations
@@ -438,6 +445,58 @@ python -m pipeline.cli.ingestion_cli status
 
 # Check logs
 tail -f logs/pipeline.log
+```
+
+### 4. Performance Validation (PERF-002 Compliance)
+
+```bash
+# Run PERF-002 performance validation  
+python scripts/perf_002_validation.py --samples 100 --threshold 50.0
+
+# Expected output should show:
+# ✅ All queries under 50ms threshold
+# ✅ PERF-002 COMPLIANT status
+
+# Monitor vector search performance in production
+python -c "
+from pipeline.storage.optimized_vector_search import get_vector_search
+import asyncio
+
+async def check_performance():
+    search = await get_vector_search()
+    report = search.get_performance_report()
+    print(f'PERF-002 Status: {report[\"perf_002_compliance\"][\"status\"]}')
+    print(f'Average Query Time: {report[\"perf_002_compliance\"][\"current_avg_ms\"]:.2f}ms')
+    print(f'Target: <{report[\"perf_002_compliance\"][\"target_ms\"]}ms')
+
+asyncio.run(check_performance())
+"
+
+# Test concurrent load performance
+python -c "
+import asyncio
+import time
+from pipeline.storage.optimized_vector_search import get_vector_search
+
+async def load_test():
+    search = await get_vector_search()
+    
+    async def single_query():
+        start = time.perf_counter()
+        await search.similarity_search('test query', limit=10)
+        return (time.perf_counter() - start) * 1000
+    
+    # Run 10 concurrent queries
+    times = await asyncio.gather(*[single_query() for _ in range(10)])
+    avg_time = sum(times) / len(times)
+    
+    print(f'Concurrent Load Test Results:')
+    print(f'Average: {avg_time:.2f}ms')
+    print(f'Max: {max(times):.2f}ms')
+    print(f'PERF-002 Compliant: {max(times) < 50.0}')
+
+asyncio.run(load_test())
+"
 ```
 
 ### 4. Budget Monitoring Test
