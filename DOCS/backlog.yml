@@ -202,7 +202,7 @@ items:
     title: "Pipeline Performance Optimization (Multi-stage Async)"
     description: "Optimize multi-stage pipeline for high-throughput processing"
     type: "Performance"
-    status: "NEW"
+    status: "DONE"
     priority: "P2"
     business_value: 11
     time_criticality: 5
@@ -418,12 +418,12 @@ backlog_stats:
     Refactor: 2
     Documentation: 1
   by_status:
-    NEW: 8
+    NEW: 7
     REFINED: 0
     READY: 0
     DOING: 0
     PR: 0
-    DONE: 9
+    DONE: 10
     BLOCKED: 0
 
 execution_strategy:
