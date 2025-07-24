@@ -1,14 +1,27 @@
 #!/bin/bash
-# Environment activation script for Agentic Startup Studio
+# Environment activation script for INFRA-001 fix
+# This script sets up a working Python environment for the project
 
-# Set the Python path for the project
-export PYTHONPATH="/root/repo:$PYTHONPATH"
+# Create and activate virtual environment if it doesn't exist
+if [ ! -d "venv" ]; then
+    echo "Creating Python virtual environment..."
+    python3 -m venv venv
+fi
 
-# Create aliases for consistency
-alias python=python3
-alias pip=pip3
+# Activate the virtual environment
+source venv/bin/activate
 
-echo "✅ Environment activated successfully"
-echo "Python: $(which python3)"
-echo "Python version: $(python3 --version)"
-echo "Pytest: $(python3 -m pytest --version 2>/dev/null || echo 'pytest not available')"
+# Set PYTHONPATH to include src directory
+export PYTHONPATH="/root/repo/src:$PYTHONPATH"
+
+# Add aliases for common commands
+alias python='python3'
+alias pytest='python -m pytest'
+
+echo "Python environment activated. Critical commands available:"
+echo "- python: $(which python)"
+echo "- pip: $(which pip)"
+echo "- PYTHONPATH: $PYTHONPATH"
+
+# Test basic functionality
+python -c "import sys; print(f'Python {sys.version} ready')"
