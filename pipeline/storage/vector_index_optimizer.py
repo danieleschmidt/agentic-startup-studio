@@ -38,16 +38,20 @@ class DistanceMetric(Enum):
 
 @dataclass
 class IndexConfig:
-    """Configuration for vector index optimization."""
+    """Configuration for vector index optimization optimized for PERF-002 (<50ms)."""
     index_type: IndexType = IndexType.HNSW
     distance_metric: DistanceMetric = DistanceMetric.COSINE
-    hnsw_m: int = 16  # Number of connections for HNSW
-    hnsw_ef_construction: int = 64  # Size of dynamic candidate list for HNSW
-    hnsw_ef_search: int = 40  # Size of dynamic candidate list for search
+    # Optimized HNSW parameters for sub-50ms performance
+    hnsw_m: int = 12  # Reduced connections for faster search (was 16) 
+    hnsw_ef_construction: int = 96  # Higher construction quality for better search speed
+    hnsw_ef_search: int = 32  # Reduced search candidates for faster queries (was 40)
     ivfflat_lists: int = 100  # Number of inverted lists for IVFFlat
-    maintenance_threshold: int = 1000  # Reindex after N new vectors
+    maintenance_threshold: int = 500  # More frequent reindexing for optimal performance
     enable_parallel_build: bool = True
     enable_query_optimization: bool = True
+    # New performance-focused parameters
+    max_query_time_ms: float = 50.0  # Target maximum query time
+    performance_monitoring: bool = True  # Enable PERF-002 monitoring
 
 
 @dataclass
