@@ -217,7 +217,7 @@ class ValidationEngine:
             return results[0]
         else:
             # Aggregate results
-            all_passed = all(r.passed for r in results)
+            all_passed = all(r.is_success() for r in results)
             messages = [r.message for r in results if r.message]
             return ValidationResult(
                 validator_name=f"Aggregated_{area.value}",
@@ -321,7 +321,7 @@ class ValidationEngine:
         """Generate a summary of validation results."""
         total_validations = sum(len(area_results) for area_results in results.values())
         passed_validations = sum(
-            sum(1 for result in area_results if result.passed)
+            sum(1 for result in area_results if result.is_success())
             for area_results in results.values()
         )
         failed_validations = total_validations - passed_validations
@@ -333,8 +333,8 @@ class ValidationEngine:
             "areas": {
                 area.value: {
                     "total": len(area_results),
-                    "passed": sum(1 for r in area_results if r.passed),
-                    "failed": sum(1 for r in area_results if not r.passed),
+                    "passed": sum(1 for r in area_results if r.is_success()),
+                    "failed": sum(1 for r in area_results if not r.is_success()),
                 }
                 for area, area_results in results.items()
             },

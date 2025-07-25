@@ -185,20 +185,13 @@ _circuit_breaker_config = CircuitBreakerConfig(
 )
 
 
-# Global adapter instance for compatibility with existing code
-_global_adapter: Optional[SemanticScholarAdapter] = None
-
-
-def get_semantic_scholar_adapter() -> SemanticScholarAdapter:
-    """Get or create the global Semantic Scholar adapter instance."""
-    global _global_adapter
-    if _global_adapter is None:
-        config = SemanticScholarConfig()
-        # Try to get API key from environment
-        import os
-        config.api_key = os.getenv('SEMANTIC_SCHOLAR_API_KEY')
-        _global_adapter = SemanticScholarAdapter(config)
-    return _global_adapter
+def _create_adapter() -> SemanticScholarAdapter:
+    """Create a new Semantic Scholar adapter instance with environment configuration."""
+    config = SemanticScholarConfig()
+    # Try to get API key from environment
+    import os
+    config.api_key = os.getenv('SEMANTIC_SCHOLAR_API_KEY')
+    return SemanticScholarAdapter(config)
 
 
 
@@ -215,7 +208,7 @@ async def search_papers_async(query: str, limit: int = 10) -> List[Dict[str, Any
     Returns:
         List of paper dictionaries
     """
-    adapter = get_semantic_scholar_adapter()
+    adapter = _create_adapter()
     return await adapter.search_papers(query, limit)
 
 
@@ -229,5 +222,5 @@ async def get_paper_details_async(paper_id: str) -> Dict[str, Any]:
     Returns:
         Dictionary containing detailed paper information
     """
-    adapter = get_semantic_scholar_adapter()
+    adapter = _create_adapter()
     return await adapter.get_paper_details(paper_id)

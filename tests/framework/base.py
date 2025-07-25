@@ -53,10 +53,6 @@ class ValidationResult:
         from .config import ValidationStatus
         return self.status == ValidationStatus.PASSED
     
-    @property
-    def passed(self) -> bool:
-        """Backwards compatibility property for passed status."""
-        return self.is_success()
     
     def __str__(self) -> str:
         """String representation of the validation result."""

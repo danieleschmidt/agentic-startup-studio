@@ -17,7 +17,6 @@ from .circuit_breaker import (
     CircuitBreaker,
     CircuitBreakerRegistry,
     get_circuit_breaker_registry,
-    circuit_breaker_decorator,
     
     # Pre-configured circuit breakers
     create_api_circuit_breaker,
@@ -68,7 +67,6 @@ __all__ = [
     "CircuitBreaker",
     "CircuitBreakerRegistry",
     "get_circuit_breaker_registry",
-    "circuit_breaker_decorator",
     
     # Pre-configured Circuit Breakers
     "create_api_circuit_breaker",
