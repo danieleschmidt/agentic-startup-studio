@@ -483,8 +483,6 @@ def circuit_breaker(name: str, config: Optional[CircuitBreakerConfig] = None):
     return decorator
 
 
-# Alias for backward compatibility
-circuit_breaker_decorator = circuit_breaker
 
 
 # Pre-configured circuit breaker factory functions
