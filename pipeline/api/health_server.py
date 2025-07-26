@@ -1,3 +1,13 @@
+"""
+Legacy Health Server - Deprecated
+
+This module is deprecated in favor of the new API Gateway with integrated
+health endpoints and authentication. Use pipeline.api.gateway instead.
+
+Kept for backward compatibility during transition period.
+"""
+
+import warnings
 from fastapi import FastAPI, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
 
@@ -6,7 +16,16 @@ from pipeline.infrastructure import (
     get_infrastructure_metrics,
 )
 
-app = FastAPI(title="Agentic Startup Studio API")
+warnings.warn(
+    "health_server.py is deprecated. Use pipeline.api.gateway instead.",
+    DeprecationWarning,
+    stacklevel=2
+)
+
+app = FastAPI(
+    title="Agentic Startup Studio API (Legacy)",
+    description="Deprecated - Use API Gateway instead"
+)
 
 # Prometheus metrics
 health_gauge = Gauge(
@@ -17,7 +36,7 @@ health_gauge = Gauge(
 
 @app.get("/health")
 async def health() -> dict:
-    """Return overall system health."""
+    """Return overall system health - DEPRECATED."""
     status = await get_infrastructure_health()
     gauge_value = 1 if status.get("status") == "healthy" else 0
     if status.get("status") == "unhealthy":
@@ -28,7 +47,7 @@ async def health() -> dict:
 
 @app.get("/metrics")
 async def metrics() -> Response:
-    """Return Prometheus metrics."""
+    """Return Prometheus metrics - DEPRECATED."""
     # Update metrics from infrastructure collector
     await get_infrastructure_metrics()
     content = generate_latest()
