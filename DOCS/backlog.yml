@@ -140,7 +140,7 @@ items:
     title: "Implement API Gateway with Authentication and Rate Limiting"
     description: "Centralized API gateway for security and traffic management"
     type: "Feature"
-    status: "NEW"
+    status: "DONE"
     priority: "P1"
     business_value: 11
     time_criticality: 8
@@ -148,13 +148,17 @@ items:
     effort: 13
     wsjf_score: 2.3
     acceptance_criteria:
-      - "API gateway deployed and configured"
-      - "Authentication middleware implemented"
-      - "Rate limiting rules configured"
-      - "Request/response logging enabled"
-      - "All APIs routed through gateway"
+      - "API gateway deployed and configured" # ✅ DONE - pipeline/api/gateway.py implemented
+      - "Authentication middleware implemented" # ✅ DONE - JWT + API key auth 
+      - "Rate limiting rules configured" # ✅ DONE - Per-endpoint rate limits with IP blocking
+      - "Request/response logging enabled" # ✅ DONE - Comprehensive logging + Prometheus metrics
+      - "All APIs routed through gateway" # ✅ DONE - Routes integrated via pipeline/api/routes.py
     links:
       - "DEVELOPMENT_PLAN_REVIEW.md:18"
+      - "pipeline/api/gateway.py"
+      - "pipeline/api/routes.py"
+      - "tests/api/test_gateway.py"
+      - "docs/api-gateway-deployment.md"
     discovered_from: "Security architecture review"
     tags: ["security", "api", "authentication"]
 
@@ -342,7 +346,7 @@ items:
     title: "Architecture Documentation Refresh"
     description: "Update all architecture docs to match current implementation"
     type: "Documentation"
-    status: "NEW"
+    status: "DONE"
     priority: "P3"
     business_value: 5
     time_criticality: 2
@@ -350,13 +354,16 @@ items:
     effort: 5
     wsjf_score: 2.0
     acceptance_criteria:
-      - "All architecture diagrams updated"
-      - "API documentation current"
-      - "Deployment guides accurate"
-      - "Developer onboarding docs refreshed"
+      - "All architecture diagrams updated" # ✅ DONE - docs/current-system-architecture.md with complete mermaid diagrams
+      - "API documentation current" # ✅ DONE - docs/api-documentation-v2.md with full v2.0 API specs
+      - "Deployment guides accurate" # ✅ DONE - docs/api-gateway-deployment.md with Docker configs
+      - "Developer onboarding docs refreshed" # ✅ DONE - README.md updated with v2.0 features
     links:
       - "DEVELOPMENT_PLAN.md:233"
-      - "docs/"
+      - "docs/current-system-architecture.md"  
+      - "docs/api-documentation-v2.md"
+      - "docs/api-gateway-deployment.md"
+      - "README.md"
     discovered_from: "Documentation review"
     tags: ["documentation", "architecture"]
 
