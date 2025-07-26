@@ -1,16 +1,16 @@
 # core/token_budget_sentinel.py
 from typing import Optional, List
-from core.alert_manager import AlertManager
+from core.interfaces import IAlertManager
 from core.budget_sentinel_base import BaseBudgetSentinel
 
 
 class TokenBudgetSentinel(BaseBudgetSentinel):
     """
     Monitors token usage against a predefined budget and triggers alerts
-    via an AlertManager.
+    via an IAlertManager interface.
     """
 
-    def __init__(self, max_tokens: int, alert_manager: Optional[AlertManager] = None):
+    def __init__(self, max_tokens: int, alert_manager: Optional[IAlertManager] = None):
         super().__init__(max_tokens, alert_manager.record_alert if alert_manager else None)
         self.alert_manager = alert_manager
         self.alerts_triggered_messages_for_test: List[str] = []
@@ -33,10 +33,10 @@ class TokenBudgetSentinel(BaseBudgetSentinel):
         if current_tokens_used < 0:
             raise ValueError("current_tokens_used cannot be negative.")
 
-        if current_tokens_used > self.max_tokens:
+        if current_tokens_used > self.max_budget:
             alert_message = (
                 f"Token budget exceeded in context '{context}'. "
-                f"Usage: {current_tokens_used}, Budget: {self.max_tokens}."
+                f"Usage: {current_tokens_used}, Budget: {self.max_budget}."
             )
             self.alerts_triggered_messages_for_test.append(alert_message)
             self._trigger_alert(alert_message, context)

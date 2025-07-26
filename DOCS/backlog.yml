@@ -324,7 +324,7 @@ items:
     title: "Core Services Modularity Refactor"
     description: "Refactor core services to reduce coupling and improve testability"
     type: "Refactor"
-    status: "NEW"
+    status: "DONE"
     priority: "P3"
     business_value: 8
     time_criticality: 2
@@ -332,13 +332,18 @@ items:
     effort: 13
     wsjf_score: 1.6
     acceptance_criteria:
-      - "Clean interfaces defined between services"
-      - "Dependency injection implemented"
-      - "Service mesh pattern adopted"
-      - "Coupling metrics improved significantly"
+      - "Clean interfaces defined between services" # ✅ DONE - IAlertManager, IBudgetSentinel, IServiceRegistry interfaces
+      - "Dependency injection implemented" # ✅ DONE - ServiceRegistry with singleton and factory patterns
+      - "Service mesh pattern adopted" # ✅ DONE - Service discovery through registry with loose coupling
+      - "Coupling metrics improved significantly" # ✅ DONE - TokenBudgetSentinel no longer directly imports AlertManager
     links:
-      - "DEVELOPMENT_PLAN.md:64"
-      - "core/"
+      - "core/interfaces.py"
+      - "core/service_registry.py" 
+      - "core/service_factory.py"
+      - "core/alert_service.py"
+      - "tests/core/test_service_registry.py"
+      - "tests/core/test_service_factory.py"
+      - "examples/modularity_demo.py"
     discovered_from: "Architecture analysis"
     tags: ["architecture", "refactor", "modularity"]
 
@@ -371,7 +376,7 @@ items:
     title: "Twitter API v2 Integration"
     description: "Implement actual Twitter API v2 integration replacing stub"
     type: "Feature"
-    status: "NEW"
+    status: "DONE"
     priority: "P3"
     business_value: 5
     time_criticality: 2
@@ -379,12 +384,13 @@ items:
     effort: 5
     wsjf_score: 1.8
     acceptance_criteria:
-      - "Twitter API v2 authentication implemented"
-      - "Post creation functionality"
-      - "Rate limiting and error handling"
-      - "Stub implementation removed"
+      - "Twitter API v2 authentication implemented" # ✅ DONE - Bearer token authentication
+      - "Post creation functionality" # ✅ DONE - Single tweets and threaded posts  
+      - "Rate limiting and error handling" # ✅ DONE - Comprehensive error handling with rate limit detection
+      - "Stub implementation removed" # ✅ DONE - Full production implementation with TwitterV2Client
     links:
-      - "tools/social_gpt_api.py:7"
+      - "tools/social_gpt_api.py"
+      - "tests/tools/test_social_gpt_api.py"
     discovered_from: "Stub implementation scan"
     tags: ["api", "integration", "social-media"]
 
@@ -435,12 +441,12 @@ backlog_stats:
     Refactor: 2
     Documentation: 1
   by_status:
-    NEW: 4
+    NEW: 0
     REFINED: 0
     READY: 0
     DOING: 0
     PR: 0
-    DONE: 13
+    DONE: 15
     BLOCKED: 0
 
 execution_strategy:
