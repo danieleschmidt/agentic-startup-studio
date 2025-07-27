@@ -1,0 +1,261 @@
+# =============================================================================
+# Enhanced Prometheus Alerting Rules for Agentic Startup Studio
+# Comprehensive monitoring for application, infrastructure, and business metrics
+# =============================================================================
+
+groups:
+  # ==========================================================================
+  # Application Health & Performance Alerts
+  # ==========================================================================
+  - name: application.health
+    interval: 15s
+    rules:
+      - alert: ApplicationDown
+        expr: up{job="startup-studio-api"} == 0
+        for: 30s
+        labels:
+          severity: critical
+          team: platform
+          category: availability
+        annotations:
+          summary: "Application is down"
+          description: "The Agentic Startup Studio API has been down for more than 30 seconds"
+          runbook_url: "https://docs.terragonlabs.com/runbooks/application-down"
+          
+      - alert: HighResponseTime
+        expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket{job="startup-studio-api"}[5m])) > 2
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          category: performance
+        annotations:
+          summary: "High response time detected"
+          description: "95th percentile response time is {{ $value }}s for the last 2 minutes"
+          runbook_url: "https://docs.terragonlabs.com/runbooks/high-response-time"
+          
+      - alert: HighErrorRate
+        expr: (rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])) * 100 > 5
+        for: 1m
+        labels:
+          severity: critical
+          team: platform
+          category: reliability
+        annotations:
+          summary: "High error rate detected"
+          description: "Error rate is {{ $value }}% for the last 1 minute"
+          runbook_url: "https://docs.terragonlabs.com/runbooks/high-error-rate"
+
+  # ==========================================================================
+  # Infrastructure Alerts
+  # ==========================================================================
+  - name: infrastructure.resources
+    interval: 30s
+    rules:
+      - alert: HighCPUUsage
+        expr: (100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100)) > 80
+        for: 5m
+        labels:
+          severity: warning
+          team: infrastructure
+          category: resources
+        annotations:
+          summary: "High CPU usage"
+          description: "CPU usage is above 80% for more than 5 minutes on {{ $labels.instance }}"
+          
+      - alert: HighMemoryUsage
+        expr: ((node_memory_MemTotal_bytes - node_memory_MemAvailable_bytes) / node_memory_MemTotal_bytes) * 100 > 90
+        for: 3m
+        labels:
+          severity: critical
+          team: infrastructure
+          category: resources
+        annotations:
+          summary: "High memory usage"
+          description: "Memory usage is above 90% for more than 3 minutes on {{ $labels.instance }}"
+          
+      - alert: DiskSpaceLow
+        expr: ((node_filesystem_size_bytes - node_filesystem_free_bytes) / node_filesystem_size_bytes) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+          team: infrastructure
+          category: storage
+        annotations:
+          summary: "Disk space running low"
+          description: "Disk usage is above 85% on {{ $labels.device }} at {{ $labels.instance }}"
+
+  # ==========================================================================
+  # Database Alerts
+  # ==========================================================================
+  - name: database.health
+    interval: 30s
+    rules:
+      - alert: PostgreSQLDown
+        expr: pg_up == 0
+        for: 1m
+        labels:
+          severity: critical
+          team: data
+          category: availability
+        annotations:
+          summary: "PostgreSQL is down"
+          description: "PostgreSQL database has been down for more than 1 minute"
+          runbook_url: "https://docs.terragonlabs.com/runbooks/postgresql-down"
+          
+      - alert: HighDatabaseConnections
+        expr: (pg_stat_database_numbackends / pg_settings_max_connections) * 100 > 80
+        for: 2m
+        labels:
+          severity: warning
+          team: data
+          category: performance
+        annotations:
+          summary: "High database connection usage"
+          description: "Database connection usage is above 80% for more than 2 minutes"
+          
+      - alert: SlowQueries
+        expr: rate(pg_stat_statements_mean_time_ms[5m]) > 1000
+        for: 3m
+        labels:
+          severity: warning
+          team: data
+          category: performance
+        annotations:
+          summary: "Slow database queries detected"
+          description: "Average query time is {{ $value }}ms for the last 3 minutes"
+
+  # ==========================================================================
+  # Business Logic Alerts
+  # ==========================================================================
+  - name: business.pipeline
+    interval: 60s
+    rules:
+      - alert: IdeaProcessingStalled
+        expr: increase(pipeline_ideas_processed_total[10m]) == 0
+        for: 10m
+        labels:
+          severity: warning
+          team: product
+          category: business
+        annotations:
+          summary: "Idea processing has stalled"
+          description: "No ideas have been processed in the last 10 minutes"
+          runbook_url: "https://docs.terragonlabs.com/runbooks/idea-processing-stalled"
+          
+      - alert: HighBudgetConsumption
+        expr: (budget_consumed_dollars / budget_total_dollars) * 100 > 80
+        for: 5m
+        labels:
+          severity: warning
+          team: finance
+          category: cost
+        annotations:
+          summary: "High budget consumption"
+          description: "Budget consumption is above 80% of the allocated limit"
+          
+      - alert: CriticalBudgetConsumption
+        expr: (budget_consumed_dollars / budget_total_dollars) * 100 > 95
+        for: 1m
+        labels:
+          severity: critical
+          team: finance
+          category: cost
+        annotations:
+          summary: "Critical budget consumption"
+          description: "Budget consumption is above 95% of the allocated limit"
+
+  # ==========================================================================
+  # Security Alerts
+  # ==========================================================================
+  - name: security.monitoring
+    interval: 30s
+    rules:
+      - alert: UnauthorizedAccess
+        expr: rate(http_requests_total{status="401"}[5m]) > 10
+        for: 1m
+        labels:
+          severity: warning
+          team: security
+          category: access
+        annotations:
+          summary: "High rate of unauthorized access attempts"
+          description: "More than 10 unauthorized access attempts per second for 1 minute"
+          
+      - alert: SuspiciousActivity
+        expr: rate(http_requests_total{status="403"}[5m]) > 5
+        for: 2m
+        labels:
+          severity: warning
+          team: security
+          category: access
+        annotations:
+          summary: "Suspicious activity detected"
+          description: "High rate of forbidden access attempts detected"
+          
+      - alert: RateLimitExceeded
+        expr: rate(http_requests_total{status="429"}[5m]) > 20
+        for: 30s
+        labels:
+          severity: info
+          team: platform
+          category: ratelimit
+        annotations:
+          summary: "Rate limit frequently exceeded"
+          description: "Rate limit is being exceeded frequently, consider adjusting limits"
+
+  # ==========================================================================
+  # External Dependencies Alerts
+  # ==========================================================================
+  - name: external.dependencies
+    interval: 60s
+    rules:
+      - alert: OpenAIAPIDown
+        expr: external_api_success_rate{service="openai"} < 0.95
+        for: 2m
+        labels:
+          severity: warning
+          team: platform
+          category: dependencies
+        annotations:
+          summary: "OpenAI API experiencing issues"
+          description: "OpenAI API success rate is below 95% for 2 minutes"
+          
+      - alert: HighExternalAPILatency
+        expr: external_api_response_time_seconds{quantile="0.95"} > 5
+        for: 3m
+        labels:
+          severity: warning
+          team: platform
+          category: performance
+        annotations:
+          summary: "High external API latency"
+          description: "95th percentile external API response time is above 5 seconds"
+
+  # ==========================================================================
+  # Data Quality Alerts
+  # ==========================================================================
+  - name: data.quality
+    interval: 120s
+    rules:
+      - alert: DataValidationFailures
+        expr: rate(data_validation_failures_total[10m]) > 0.1
+        for: 5m
+        labels:
+          severity: warning
+          team: data
+          category: quality
+        annotations:
+          summary: "High data validation failure rate"
+          description: "Data validation failure rate is above 10% for 5 minutes"
+          
+      - alert: DuplicateDetectionIssues
+        expr: duplicate_detection_accuracy < 0.9
+        for: 5m
+        labels:
+          severity: warning
+          team: data
+          category: quality
+        annotations:
+          summary: "Duplicate detection accuracy degraded"
+          description: "Duplicate detection accuracy is below 90%"
