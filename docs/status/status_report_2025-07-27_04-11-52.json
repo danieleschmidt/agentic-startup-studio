@@ -1,0 +1,25 @@
+{
+  "timestamp": "2025-07-27T04:11:52.739151",
+  "total_items": 17,
+  "by_status": {
+    "NEW": 0,
+    "REFINED": 0,
+    "READY": 0,
+    "DOING": 0,
+    "PR": 0,
+    "DONE": 17,
+    "BLOCKED": 0
+  },
+  "by_priority": {
+    "P0": 3,
+    "P1": 3,
+    "P2": 7,
+    "P3": 3,
+    "P4": 1
+  },
+  "avg_wsjf_score": 4.076470588235294,
+  "ready_items": 0,
+  "blocked_items": 0,
+  "completed_items": 17,
+  "completion_rate": 100.0
+}
