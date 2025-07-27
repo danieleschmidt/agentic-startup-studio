@@ -1,0 +1,153 @@
+{
+  "name": "Agentic Startup Studio",
+  "dockerComposeFile": "../docker-compose.dev.yml",
+  "service": "devcontainer",
+  "workspaceFolder": "/workspace",
+  "shutdownAction": "stopCompose",
+  
+  "features": {
+    "ghcr.io/devcontainers/features/common-utils:2": {
+      "installZsh": true,
+      "username": "vscode",
+      "userUid": 1000,
+      "userGid": 1000
+    },
+    "ghcr.io/devcontainers/features/python:1": {
+      "version": "3.11",
+      "installTools": true
+    },
+    "ghcr.io/devcontainers/features/node:1": {
+      "version": "18",
+      "installYarnUsingApt": true
+    },
+    "ghcr.io/devcontainers/features/docker-in-docker:2": {
+      "version": "latest",
+      "enableNonRootDocker": true
+    },
+    "ghcr.io/devcontainers/features/git:1": {
+      "version": "latest"
+    }
+  },
+
+  "customizations": {
+    "vscode": {
+      "extensions": [
+        "ms-python.python",
+        "ms-python.black-formatter",
+        "ms-python.isort",
+        "charliermarsh.ruff",
+        "ms-python.mypy-type-checker",
+        "ms-vscode.test-adapter-converter",
+        "ms-vscode.extension-test-runner",
+        "redhat.vscode-yaml",
+        "ms-vscode.vscode-json",
+        "bradlc.vscode-tailwindcss",
+        "github.copilot",
+        "github.copilot-chat",
+        "ms-vscode.vscode-docker",
+        "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "ms-vscode.makefile-tools",
+        "tamasfe.even-better-toml",
+        "github.vscode-github-actions",
+        "ms-vscode.hexeditor",
+        "ms-vscode.live-server",
+        "esbenp.prettier-vscode",
+        "streetsidesoftware.code-spell-checker",
+        "gruntfuggly.todo-tree",
+        "eamodio.gitlens",
+        "ms-vscode.vscode-github-issue-notebooks"
+      ],
+      "settings": {
+        "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.linting.enabled": true,
+        "python.linting.pylintEnabled": false,
+        "python.linting.ruffEnabled": true,
+        "python.formatting.provider": "black",
+        "python.sortImports.args": ["--profile", "black"],
+        "python.testing.pytestEnabled": true,
+        "python.testing.unittestEnabled": false,
+        "python.testing.pytestArgs": [
+          "tests",
+          "--verbose",
+          "--tb=short"
+        ],
+        "files.exclude": {
+          "**/__pycache__": true,
+          "**/*.pyc": true,
+          ".pytest_cache": true,
+          ".coverage": true,
+          "htmlcov": true,
+          ".ruff_cache": true,
+          ".mypy_cache": true
+        },
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": "explicit",
+          "source.fixAll.ruff": "explicit"
+        },
+        "files.trimTrailingWhitespace": true,
+        "files.insertFinalNewline": true,
+        "editor.rulers": [88, 120],
+        "python.analysis.typeCheckingMode": "basic",
+        "todo-tree.general.tags": [
+          "BUG",
+          "HACK",
+          "FIXME",
+          "TODO",
+          "XXX",
+          "[ ]",
+          "[x]"
+        ],
+        "git.autofetch": true,
+        "terminal.integrated.defaultProfile.linux": "zsh"
+      }
+    }
+  },
+
+  "forwardPorts": [
+    8000,
+    5432,
+    6379,
+    3000,
+    9090,
+    3001
+  ],
+  "portsAttributes": {
+    "8000": {
+      "label": "API Server",
+      "onAutoForward": "notify"
+    },
+    "5432": {
+      "label": "PostgreSQL",
+      "onAutoForward": "silent"
+    },
+    "6379": {
+      "label": "Redis",
+      "onAutoForward": "silent"
+    },
+    "3000": {
+      "label": "Frontend Dev",
+      "onAutoForward": "openPreview"
+    },
+    "9090": {
+      "label": "Prometheus",
+      "onAutoForward": "silent"
+    },
+    "3001": {
+      "label": "Grafana",
+      "onAutoForward": "silent"
+    }
+  },
+
+  "postCreateCommand": "bash .devcontainer/postCreate.sh",
+  "postStartCommand": "echo '🚀 Development environment ready!'",
+
+  "remoteUser": "vscode",
+  "containerUser": "vscode",
+
+  "mounts": [
+    "source=${localWorkspaceFolder}/.env,target=/workspace/.env,type=bind,consistency=cached",
+    "source=vscode-extensions,target=/home/vscode/.vscode-server/extensions,type=volume",
+    "source=vscode-extensions-insiders,target=/home/vscode/.vscode-server-insiders/extensions,type=volume"
+  ]
+}
