@@ -208,3 +208,122 @@ docker-compose.override.yml
 *.log
 # Test data cache
 /tests/cache/
+
+# ========== SDLC & DEVELOPMENT ==========
+
+# IDE and Editor files
+.idea/
+.vscode/launch.json
+.vscode/tasks.json
+*.swp
+*.swo
+*~
+
+# Development tools
+.secrets.baseline
+bandit-report.json
+safety-report.json
+mypy-report.txt
+ruff-report.txt
+
+# Documentation
+site/
+docs_build/
+
+# Backup files
+*.bak
+*.backup
+*.orig
+
+# Temporary files
+temp/
+tmp/
+*.tmp
+*.temp
+
+# Archive files
+*.zip
+*.tar.gz
+*.tar.bz2
+*.7z
+
+# ========== APPLICATION SPECIFIC ==========
+
+# Application logs
+logs/
+*.log.*
+application.log
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+dump.rdb
+
+# Cache directories
+.cache/
+cache/
+__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
+.nyc_output
+
+# Build artifacts
+build/
+dist/
+target/
+out/
+artifacts/
+
+# ========== SECURITY ==========
+
+# Secret files
+.env.local
+.env.production
+.env.staging
+*.pem
+*.key
+*.crt
+*.csr
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+
+# ========== CI/CD ==========
+
+# CI artifacts
+coverage.xml
+junit.xml
+test-results.xml
+*.coverage
+
+# Container artifacts
+.dockerignore.bak
+
+# ========== MONITORING ==========
+
+# Metrics and monitoring
+prometheus_data/
+grafana_data/
+alertmanager_data/
+
+# ========== PLATFORM SPECIFIC ==========
+
+# Windows
+Thumbs.db
+ehthumbs.db
+Desktop.ini
+$RECYCLE.BIN/
+
+# Linux
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# Cloud storage
+.dropbox
+.dropbox.attr
+.icloud

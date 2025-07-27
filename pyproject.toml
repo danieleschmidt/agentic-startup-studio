@@ -1,12 +1,293 @@
 [build-system]
-requires = ["setuptools>=61"]
+requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
 name = "agentic_startup_studio"
-version = "0.0.1"
-requires-python = ">=3.8"
+version = "2.0.0"
+description = "AI-powered startup idea validation and market testing platform"
+readme = "README.md"
+license = {file = "LICENSE"}
+authors = [
+    {name = "Terragon Labs", email = "dev@terragonlabs.com"}
+]
+maintainers = [
+    {name = "Terragon Labs", email = "dev@terragonlabs.com"}
+]
+keywords = ["ai", "startup", "validation", "automation", "sdlc"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Operating System :: OS Independent",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Software Development :: Libraries :: Python Modules",
+    "Topic :: Scientific/Engineering :: Artificial Intelligence"
+]
+requires-python = ">=3.11"
+dependencies = [
+    "langgraph>=0.0.32",
+    "langchain>=0.2.0",
+    "crewai>=0.23.2",
+    "langchain-core>=0.2.0",
+    "pgvector>=0.2.3",
+    "psycopg[binary]",
+    "psycopg2-binary>=2.9.5",
+    "openai>=1.26.0",
+    "google-generativeai>=0.4.0",
+    "duckduckgo-search>=4.8.0",
+    "google-cloud-secret-manager>=2.16.2",
+    "bandit>=1.7.8",
+    "python-dotenv>=1.0.1",
+    "sentence-transformers>=2.7.0",
+    "streamlit>=1.36.0",
+    "hypothesis>=6.0.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "fastapi>=0.104.0",
+    "uvicorn[standard]>=0.24.0",
+    "faker>=20.1.0",
+    "docker>=7.0.0",
+    "beautifulsoup4>=4.12.0",
+    "langchain-openai>=0.0.2",
+    "sqlmodel>=0.0.16",
+    "aiohttp>=3.12.0",
+    "aioresponses>=0.7.0",
+    "asyncpg>=0.29.0",
+    "jinja2>=3.1.3",
+    "numpy>=1.26.4",
+    "responses>=0.25.0",
+    "prometheus-client>=0.20.0",
+    "opentelemetry-sdk>=1.34.0",
+    "opentelemetry-exporter-otlp-proto-http>=1.34.0",
+    "opentelemetry-instrumentation-fastapi>=0.45b0",
+    "PyJWT>=2.8.0",
+    "python-multipart>=0.0.6",
+    "tqdm",
+    "rich"
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    "pytest-mock>=3.10.0",
+    "pytest-asyncio>=0.21.0",
+    "black>=23.0.0",
+    "isort>=5.12.0",
+    "mypy>=1.5.0",
+    "ruff>=0.0.290",
+    "pre-commit>=3.0.0",
+    "safety>=2.3.0",
+    "bandit[toml]>=1.7.5",
+    "coverage[toml]>=7.0.0"
+]
+test = [
+    "pytest>=7.0.0",
+    "pytest-cov>=4.0.0",
+    "pytest-xdist>=3.0.0",
+    "pytest-mock>=3.10.0",
+    "pytest-asyncio>=0.21.0",
+    "httpx>=0.24.0",
+    "factory-boy>=3.3.0"
+]
+docs = [
+    "mkdocs>=1.5.0",
+    "mkdocs-material>=9.0.0",
+    "mkdocstrings[python]>=0.22.0"
+]
+all = ["agentic_startup_studio[dev,test,docs]"]
+
+[project.urls]
+Homepage = "https://github.com/terragonlabs/agentic-startup-studio"
+Documentation = "https://docs.terragonlabs.com/agentic-startup-studio"
+Repository = "https://github.com/terragonlabs/agentic-startup-studio.git"
+Issues = "https://github.com/terragonlabs/agentic-startup-studio/issues"
+Changelog = "https://github.com/terragonlabs/agentic-startup-studio/blob/main/CHANGELOG.md"
+
+[project.scripts]
+studio = "agentic_startup_studio.cli:main"
+studio-api = "pipeline.api.gateway:main"
+studio-health = "scripts.run_health_checks:main"
 
 [tool.setuptools]
 package-dir = {"" = "src"}
 packages = ["agentic_startup_studio"]
+
+[tool.setuptools.dynamic]
+version = {attr = "agentic_startup_studio.__version__"}
+
+# Testing configuration
+[tool.pytest.ini_options]
+minversion = "7.0"
+addopts = [
+    "--strict-markers",
+    "--strict-config",
+    "--verbose",
+    "--tb=short",
+    "--cov=pipeline",
+    "--cov=core",
+    "--cov-report=term-missing",
+    "--cov-report=html:htmlcov",
+    "--cov-report=xml",
+    "--cov-fail-under=90",
+    "--maxfail=3",
+    "--durations=10"
+]
+testpaths = ["tests"]
+python_files = ["test_*.py", "*_test.py"]
+python_classes = ["Test*"]
+python_functions = ["test_*"]
+markers = [
+    "slow: marks tests as slow (deselect with '-m \"not slow\"')",
+    "integration: marks tests as integration tests",
+    "unit: marks tests as unit tests",
+    "e2e: marks tests as end-to-end tests",
+    "security: marks tests as security-related",
+    "performance: marks tests as performance-related"
+]
+filterwarnings = [
+    "error",
+    "ignore::UserWarning",
+    "ignore::DeprecationWarning",
+    "ignore::PendingDeprecationWarning"
+]
+
+# Coverage configuration
+[tool.coverage.run]
+source = ["pipeline", "core", "src"]
+omit = [
+    "*/tests/*",
+    "*/test_*",
+    "*/__pycache__/*",
+    "*/migrations/*",
+    "*/venv/*",
+    "*/.venv/*"
+]
+branch = true
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if settings.DEBUG",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if 0:",
+    "if __name__ == .__main__.:",
+    "class .*\\bProtocol\\):",
+    "@(abc\\.)?abstractmethod"
+]
+show_missing = true
+skip_covered = false
+sort = "Cover"
+
+# Black formatting
+[tool.black]
+line-length = 88
+target-version = ['py311']
+include = '\.pyi?$'
+extend-exclude = '''
+/(
+  # directories
+  \.eggs
+  | \.git
+  | \.hg
+  | \.mypy_cache
+  | \.tox
+  | \.venv
+  | build
+  | dist
+)/
+'''
+
+# isort configuration
+[tool.isort]
+profile = "black"
+multi_line_output = 3
+line_length = 88
+known_first_party = ["agentic_startup_studio", "pipeline", "core"]
+known_third_party = ["fastapi", "pydantic", "sqlalchemy"]
+sections = ["FUTURE", "STDLIB", "THIRDPARTY", "FIRSTPARTY", "LOCALFOLDER"]
+include_trailing_comma = true
+force_grid_wrap = 0
+use_parentheses = true
+ensure_newline_before_comments = true
+
+# Ruff configuration
+[tool.ruff]
+target-version = "py311"
+line-length = 88
+fix = true
+show-fixes = true
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # isort
+    "C",   # flake8-comprehensions
+    "B",   # flake8-bugbear
+    "UP",  # pyupgrade
+    "N",   # pep8-naming
+    "S",   # flake8-bandit
+    "T20", # flake8-print
+    "PT",  # flake8-pytest-style
+    "RET", # flake8-return
+    "SIM", # flake8-simplify
+    "TID", # flake8-tidy-imports
+    "ARG", # flake8-unused-arguments
+    "ERA", # eradicate
+    "PL",  # pylint
+    "PERF" # perflint
+]
+ignore = [
+    "E501",   # line too long, handled by black
+    "B008",   # do not perform function calls in argument defaults
+    "C901",   # too complex
+    "PLR0913", # too many arguments
+    "S101",   # use of assert
+    "T201",   # print statements (allowed in scripts)
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "ARG", "PLR2004"]
+"scripts/*" = ["T201", "S602", "S603"]
+
+# MyPy configuration
+[tool.mypy]
+python_version = "3.11"
+check_untyped_defs = true
+disallow_any_generics = true
+disallow_incomplete_defs = true
+disallow_untyped_defs = true
+no_implicit_optional = true
+warn_redundant_casts = true
+warn_unused_ignores = true
+warn_return_any = true
+strict_equality = true
+strict_concatenate = true
+disallow_subclassing_any = true
+disallow_untyped_calls = true
+disallow_untyped_decorators = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+module = [
+    "tests.*",
+    "crewai.*",
+    "langgraph.*",
+    "langchain.*",
+    "pgvector.*"
+]
+ignore_missing_imports = true
+
+# Bandit security linting
+[tool.bandit]
+exclude_dirs = ["tests", "build", "dist"]
+skips = ["B101", "B601"]
