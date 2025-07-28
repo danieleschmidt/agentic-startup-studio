@@ -1,0 +1,1 @@
+# Mutation testing configuration for Agentic Startup Studio
