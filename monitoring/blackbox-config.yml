@@ -1,0 +1,51 @@
+modules:
+  http_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      method: GET
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200]
+      follow_redirects: true
+      preferred_ip_protocol: "ip4"
+
+  http_post_2xx:
+    prober: http
+    timeout: 5s
+    http:
+      method: POST
+      valid_http_versions: ["HTTP/1.1", "HTTP/2.0"]
+      valid_status_codes: [200, 201]
+      headers:
+        Content-Type: "application/json"
+
+  tcp_connect:
+    prober: tcp
+    timeout: 5s
+
+  postgres_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      query_response:
+        - expect: "^\\x00"
+        - send: "\\x00\\x00\\x00\\x17\\x00\\x03\\x00\\x00user\\x00test\\x00\\x00"
+
+  redis_connect:
+    prober: tcp
+    timeout: 5s
+    tcp:
+      query_response:
+        - send: "PING"
+        - expect: "PONG"
+
+  dns_query:
+    prober: dns
+    timeout: 5s
+    dns:
+      query_name: "example.com"
+      query_type: "A"
+
+  icmp:
+    prober: icmp
+    timeout: 5s
