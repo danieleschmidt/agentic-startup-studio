@@ -1,0 +1,525 @@
+name: CD Pipeline
+
+on:
+  push:
+    branches: [main, master]
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Deployment environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+      skip_tests:
+        description: 'Skip tests (emergency deployment)'
+        required: false
+        default: false
+        type: boolean
+
+env:
+  PYTHON_VERSION: "3.11"
+  DOCKER_BUILDKIT: 1
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  # ============================================================================
+  # Build and Test
+  # ============================================================================
+  build-and-test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    if: ${{ !inputs.skip_tests }}
+    
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      image-tag: ${{ steps.meta.outputs.tags }}
+      image-digest: ${{ steps.build.outputs.digest }}
+    
+    services:
+      postgres:
+        image: postgres:15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+      
+      redis:
+        image: redis:7
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pytest pytest-cov pytest-xdist
+      
+      - name: Determine version
+        id: version
+        run: |
+          if [[ $GITHUB_REF == refs/tags/* ]]; then
+            VERSION=${GITHUB_REF#refs/tags/}
+          else
+            VERSION=${GITHUB_SHA::8}
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Version: $VERSION"
+      
+      - name: Run comprehensive tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          ENVIRONMENT: test
+        run: |
+          python scripts/run_comprehensive_tests.py \
+            --types lint unit integration contract
+      
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+      
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+      
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      
+      - name: Build and push Docker image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          target: production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.run_id }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ steps.version.outputs.version }}
+      
+      - name: Generate SBOM
+        uses: anchore/sbom-action@v0
+        with:
+          image: ${{ steps.meta.outputs.tags }}
+          format: spdx-json
+          output-file: sbom.spdx.json
+      
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v3
+        with:
+          name: sbom
+          path: sbom.spdx.json
+
+  # ============================================================================
+  # Security Validation
+  # ============================================================================
+  security-validation:
+    name: Security Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-and-test]
+    if: always() && (needs.build-and-test.result == 'success' || inputs.skip_tests)
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ needs.build-and-test.outputs.image-tag || env.REGISTRY }}/{{ env.IMAGE_NAME }}:latest
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+      
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v2
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+      
+      - name: Check for critical vulnerabilities
+        run: |
+          # Parse SARIF and check for critical vulnerabilities
+          # Fail if critical vulnerabilities are found
+          python scripts/check_vulnerabilities.py trivy-results.sarif
+
+  # ============================================================================
+  # Deploy to Staging
+  # ============================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-and-test, security-validation]
+    if: always() && (needs.security-validation.result == 'success' || inputs.skip_tests)
+    environment:
+      name: staging
+      url: https://staging.agentic-startup-studio.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Deploy to staging
+        run: |
+          # Replace with your deployment method
+          echo "Deploying to staging environment..."
+          echo "Image: ${{ needs.build-and-test.outputs.image-tag }}"
+          
+          # Example: Update Kubernetes deployment
+          # kubectl set image deployment/app app=${{ needs.build-and-test.outputs.image-tag }}
+          
+          # Example: Update Docker Compose
+          # docker-compose -f docker-compose.staging.yml up -d
+          
+          # Example: Deploy to cloud platform
+          # gcloud run deploy app --image ${{ needs.build-and-test.outputs.image-tag }}
+      
+      - name: Run smoke tests
+        run: |
+          sleep 30  # Wait for deployment to complete
+          python scripts/run_smoke_tests.py --url https://staging.agentic-startup-studio.com
+      
+      - name: Update deployment status
+        run: |
+          echo "Staging deployment completed successfully"
+          echo "Version: ${{ needs.build-and-test.outputs.version }}"
+          echo "Image: ${{ needs.build-and-test.outputs.image-tag }}"
+
+  # ============================================================================
+  # End-to-End Testing on Staging
+  # ============================================================================
+  e2e-staging:
+    name: E2E Tests on Staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [deploy-staging]
+    if: always() && needs.deploy-staging.result == 'success'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "18"
+          cache: 'npm'
+      
+      - name: Install Playwright
+        run: |
+          npm ci
+          npx playwright install --with-deps
+      
+      - name: Run E2E tests against staging
+        run: |
+          npx playwright test --config=playwright.staging.config.ts
+        env:
+          BASE_URL: https://staging.agentic-startup-studio.com
+      
+      - name: Upload E2E test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: e2e-staging-results
+          path: |
+            playwright-report/
+            test-results/
+
+  # ============================================================================
+  # Production Deployment
+  # ============================================================================
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [build-and-test, security-validation, e2e-staging]
+    if: |
+      always() && 
+      (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/tags/v') || inputs.environment == 'production') &&
+      (needs.e2e-staging.result == 'success' || inputs.skip_tests)
+    environment:
+      name: production
+      url: https://agentic-startup-studio.com
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Create deployment
+        id: deployment
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const deployment = await github.rest.repos.createDeployment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              ref: context.sha,
+              environment: 'production',
+              required_contexts: [],
+              auto_merge: false,
+              description: 'Production deployment via CD pipeline'
+            });
+            return deployment.data.id;
+      
+      - name: Deploy to production
+        run: |
+          echo "Deploying to production environment..."
+          echo "Image: ${{ needs.build-and-test.outputs.image-tag }}"
+          
+          # Blue-green deployment example
+          # 1. Deploy to green environment
+          # 2. Run health checks
+          # 3. Switch traffic to green
+          # 4. Cleanup blue environment
+          
+          # Example deployment commands:
+          # kubectl apply -f k8s/production/
+          # kubectl set image deployment/app app=${{ needs.build-and-test.outputs.image-tag }}
+          # kubectl rollout status deployment/app
+      
+      - name: Run production smoke tests
+        run: |
+          sleep 60  # Wait for deployment to complete
+          python scripts/run_smoke_tests.py --url https://agentic-startup-studio.com
+      
+      - name: Update deployment status - Success
+        if: success()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: ${{ steps.deployment.outputs.result }},
+              state: 'success',
+              environment_url: 'https://agentic-startup-studio.com',
+              description: 'Production deployment completed successfully'
+            });
+      
+      - name: Update deployment status - Failure
+        if: failure()
+        uses: actions/github-script@v7
+        with:
+          script: |
+            await github.rest.repos.createDeploymentStatus({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              deployment_id: ${{ steps.deployment.outputs.result }},
+              state: 'failure',
+              description: 'Production deployment failed'
+            });
+
+  # ============================================================================
+  # Create Release
+  # ============================================================================
+  create-release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: [build-and-test, deploy-production]
+    if: startsWith(github.ref, 'refs/tags/v') && needs.deploy-production.result == 'success'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+      
+      - name: Generate release notes
+        id: release-notes
+        run: |
+          python scripts/release.py --generate-notes-only > release-notes.md
+          echo "release-notes<<EOF" >> $GITHUB_OUTPUT
+          cat release-notes.md >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+      
+      - name: Download SBOM
+        uses: actions/download-artifact@v3
+        with:
+          name: sbom
+      
+      - name: Create GitHub Release
+        uses: actions/create-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          release_name: Release ${{ github.ref_name }}
+          body: ${{ steps.release-notes.outputs.release-notes }}
+          draft: false
+          prerelease: false
+      
+      - name: Upload SBOM to release
+        uses: actions/upload-release-asset@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          upload_url: ${{ steps.create_release.outputs.upload_url }}
+          asset_path: ./sbom.spdx.json
+          asset_name: sbom.spdx.json
+          asset_content_type: application/json
+
+  # ============================================================================
+  # Post-Deployment Monitoring
+  # ============================================================================
+  post-deployment-monitoring:
+    name: Post-Deployment Monitoring
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [deploy-production]
+    if: always() && needs.deploy-production.result == 'success'
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+      
+      - name: Install monitoring dependencies
+        run: |
+          pip install requests prometheus-client
+      
+      - name: Monitor deployment health
+        run: |
+          python scripts/monitor_deployment.py \
+            --url https://agentic-startup-studio.com \
+            --duration 1800 \
+            --alert-threshold 0.99
+      
+      - name: Generate deployment report
+        run: |
+          python scripts/generate_deployment_report.py \
+            --version ${{ needs.build-and-test.outputs.version }} \
+            --image ${{ needs.build-and-test.outputs.image-tag }}
+
+  # ============================================================================
+  # Notification
+  # ============================================================================
+  notify-deployment:
+    name: Notify Deployment
+    runs-on: ubuntu-latest
+    needs: [deploy-production, create-release, post-deployment-monitoring]
+    if: always()
+    
+    steps:
+      - name: Notify Success
+        if: needs.deploy-production.result == 'success'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: success
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          custom_payload: |
+            {
+              "text": "🚀 Production Deployment Successful",
+              "attachments": [
+                {
+                  "color": "good",
+                  "fields": [
+                    {
+                      "title": "Version",
+                      "value": "${{ needs.build-and-test.outputs.version }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Environment",
+                      "value": "Production",
+                      "short": true
+                    },
+                    {
+                      "title": "URL",
+                      "value": "https://agentic-startup-studio.com",
+                      "short": false
+                    }
+                  ]
+                }
+              ]
+            }
+      
+      - name: Notify Failure
+        if: needs.deploy-production.result == 'failure'
+        uses: 8398a7/action-slack@v3
+        with:
+          status: failure
+          webhook_url: ${{ secrets.SLACK_WEBHOOK_URL }}
+          fields: repo,message,commit,author,action,eventName,ref,workflow
+          custom_payload: |
+            {
+              "text": "❌ Production Deployment Failed",
+              "attachments": [
+                {
+                  "color": "danger",
+                  "fields": [
+                    {
+                      "title": "Repository",
+                      "value": "${{ github.repository }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Branch/Tag",
+                      "value": "${{ github.ref_name }}",
+                      "short": true
+                    },
+                    {
+                      "title": "Commit",
+                      "value": "${{ github.sha }}",
+                      "short": false
+                    }
+                  ]
+                }
+              ]
+            }
