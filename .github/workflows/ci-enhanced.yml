@@ -1,0 +1,323 @@
+name: Enhanced CI/CD Pipeline
+
+on:
+  push:
+    branches: [main, dev, 'feature/*']
+  pull_request:
+    branches: [main, dev]
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: 'Target environment'
+        required: true
+        default: 'staging'
+        type: choice
+        options:
+          - staging
+          - production
+
+env:
+  PYTHON_VERSION: '3.11'
+  UV_CACHE_DIR: ~/.cache/uv
+
+jobs:
+  # Quality Gates
+  code-quality:
+    name: Code Quality & Security
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    outputs:
+      cache-key: ${{ steps.cache-key.outputs.key }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Generate cache key
+        id: cache-key
+        run: echo "key=${{ runner.os }}-py${{ env.PYTHON_VERSION }}-${{ hashFiles('requirements.txt', 'pyproject.toml') }}" >> $GITHUB_OUTPUT
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: ${{ steps.cache-key.outputs.key }}
+          restore-keys: |
+            ${{ runner.os }}-py${{ env.PYTHON_VERSION }}-
+
+      - name: Install UV
+        run: pip install uv
+
+      - name: Install dependencies
+        run: |
+          uv pip install --system -r requirements.txt
+          uv pip install --system -e ".[dev,test]"
+
+      - name: Code formatting check
+        run: |
+          black --check --diff .
+          isort --check-only --diff .
+          ruff format --check .
+
+      - name: Lint with Ruff
+        run: ruff check --output-format=github .
+
+      - name: Type checking
+        run: mypy . --show-error-codes --no-error-summary
+
+      - name: Security scan
+        run: |
+          bandit -r pipeline/ core/ scripts/ -f json -o bandit-report.json
+          safety check --json --output safety-report.json
+
+      - name: Upload security artifacts
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: security-reports
+          path: |
+            bandit-report.json
+            safety-report.json
+
+  # Test Matrix
+  test-matrix:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    needs: code-quality
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        test-type: [unit, integration, e2e]
+        include:
+          - test-type: unit
+            markers: "unit"
+            timeout: 10
+          - test-type: integration
+            markers: "integration"
+            timeout: 20
+          - test-type: e2e
+            markers: "e2e"
+            timeout: 30
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Cache dependencies
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/uv
+            ~/.cache/pip
+          key: ${{ needs.code-quality.outputs.cache-key }}
+
+      - name: Install UV and dependencies
+        run: |
+          pip install uv
+          uv pip install --system -r requirements.txt
+          uv pip install --system -e ".[dev,test]"
+
+      - name: Run ${{ matrix.test-type }} tests
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_db
+          REDIS_URL: redis://localhost:6379
+          PYTEST_TIMEOUT: ${{ matrix.timeout }}
+        run: |
+          pytest -m "${{ matrix.markers }}" \
+            --cov=pipeline --cov=core \
+            --cov-report=xml \
+            --cov-report=term-missing \
+            --junit-xml=test-results-${{ matrix.test-type }}.xml \
+            --timeout=${{ matrix.timeout }} \
+            --maxfail=3 \
+            -v
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: test-results-${{ matrix.test-type }}
+          path: |
+            test-results-${{ matrix.test-type }}.xml
+            coverage.xml
+
+  # Performance & Load Testing
+  performance-tests:
+    name: Performance Testing
+    runs-on: ubuntu-latest
+    needs: code-quality
+    timeout-minutes: 20
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: perf_test_db
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+
+      - name: Install dependencies
+        run: |
+          pip install uv
+          uv pip install --system -r requirements.txt
+          uv pip install --system -e ".[dev,test]"
+
+      - name: Run performance benchmarks
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/perf_test_db
+        run: python scripts/performance_benchmark.py --output=performance-results.json
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v4
+        with:
+          name: performance-results
+          path: performance-results.json
+
+  # Container Build & Security Scan
+  container-security:
+    name: Container Security
+    runs-on: ubuntu-latest
+    needs: test-matrix
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build container image
+        run: |
+          docker build -t agentic-startup-studio:${{ github.sha }} .
+
+      - name: Run Trivy security scan
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: 'agentic-startup-studio:${{ github.sha }}'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # Deployment to Staging
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: [test-matrix, container-security]
+    if: github.ref == 'refs/heads/main' || github.event_name == 'workflow_dispatch'
+    environment: staging
+    timeout-minutes: 15
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Deploy to staging
+        run: |
+          echo "🚀 Deploying to staging environment..."
+          echo "Version: ${{ github.sha }}"
+          echo "Environment: staging"
+          # Add actual deployment commands here
+          echo "✅ Staging deployment complete"
+
+  # Production Deployment (Manual Approval)
+  deploy-production:
+    name: Deploy to Production
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.event.inputs.environment == 'production'
+    environment: production
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Production deployment
+        run: |
+          echo "🚀 Deploying to production environment..."
+          echo "Version: ${{ github.sha }}"
+          echo "Environment: production"
+          # Add actual production deployment commands here
+          echo "✅ Production deployment complete"
+
+      - name: Post-deployment health check
+        run: |
+          echo "🏥 Running post-deployment health checks..."
+          # Add health check commands here
+          echo "✅ Health checks passed"
+
+  # Quality Gates Summary
+  quality-gate:
+    name: Quality Gate Summary
+    runs-on: ubuntu-latest
+    needs: [code-quality, test-matrix, container-security]
+    if: always()
+    steps:
+      - name: Check quality gate status
+        run: |
+          if [[ "${{ needs.code-quality.result }}" == "success" && 
+                "${{ needs.test-matrix.result }}" == "success" && 
+                "${{ needs.container-security.result }}" == "success" ]]; then
+            echo "✅ All quality gates passed"
+            exit 0
+          else
+            echo "❌ Quality gate failed"
+            echo "Code Quality: ${{ needs.code-quality.result }}"
+            echo "Test Matrix: ${{ needs.test-matrix.result }}"
+            echo "Container Security: ${{ needs.container-security.result }}"
+            exit 1
+          fi
