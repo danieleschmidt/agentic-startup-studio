@@ -1,0 +1,135 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Renovate configuration for Terragon Labs Agentic Startup Studio",
+  "extends": [
+    "config:recommended",
+    "security:openssf-scorecard",
+    ":dependencyDashboard",
+    ":semanticCommits",
+    ":automergeDigest",
+    ":automergeBranch",
+    ":timezone(America/New_York)"
+  ],
+  "schedule": ["before 6am on monday"],
+  "prConcurrentLimit": 3,
+  "prHourlyLimit": 2,
+  "platformAutomerge": true,
+  "gitIgnoredAuthors": ["renovate[bot]@users.noreply.github.com"],
+  "assignees": ["@terragonlabs/devops-team"],
+  "reviewers": ["@terragonlabs/core-team"],
+  
+  "packageRules": [
+    {
+      "description": "Auto-merge patch and minor updates for dev dependencies",
+      "matchPackagePatterns": ["^@types/", "eslint", "prettier", "jest", "typescript"],
+      "matchUpdateTypes": ["patch", "minor"],
+      "automerge": true,
+      "platformAutomerge": true
+    },
+    {
+      "description": "Auto-merge security updates",
+      "matchUpdateTypes": ["patch"],
+      "matchPackagePatterns": ["security", "bandit", "safety"],
+      "automerge": true,
+      "platformAutomerge": true
+    },
+    {
+      "description": "Group Python testing dependencies",
+      "matchPackagePatterns": ["pytest", "coverage", "hypothesis"],
+      "groupName": "Python testing",
+      "schedule": ["before 8am on monday"]
+    },
+    {
+      "description": "Group AI/ML dependencies - require manual review",
+      "matchPackagePatterns": ["openai", "langchain", "transformers", "torch", "tensorflow"],
+      "groupName": "AI/ML dependencies",
+      "automerge": false,
+      "schedule": ["before 10am on monday"],
+      "reviewers": ["@terragonlabs/ai-team"],
+      "assignees": ["@terragonlabs/ai-team"]
+    },
+    {
+      "description": "Group database dependencies",
+      "matchPackagePatterns": ["psycopg", "sqlalchemy", "alembic", "pgvector"],
+      "groupName": "Database dependencies",
+      "automerge": false,
+      "reviewers": ["@terragonlabs/data-team"]
+    },
+    {
+      "description": "Group security dependencies - require security team review",
+      "matchPackagePatterns": ["bandit", "safety", "cryptography", "pyjwt"],
+      "groupName": "Security dependencies",
+      "automerge": false,
+      "reviewers": ["@terragonlabs/security-team"],
+      "assignees": ["@terragonlabs/security-team"]
+    },
+    {
+      "description": "Major updates require architecture review",
+      "matchUpdateTypes": ["major"],
+      "automerge": false,
+      "reviewers": ["@terragonlabs/architecture-review", "@terragonlabs/core-team"],
+      "assignees": ["@terragonlabs/core-team"],
+      "schedule": ["before 10am on first day of month"]
+    }
+  ],
+
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["at any time"],
+    "prCreation": "immediate",
+    "assignees": ["@terragonlabs/security-team"],
+    "reviewers": ["@terragonlabs/security-team"]
+  },
+
+  "lockFileMaintenance": {
+    "enabled": true,
+    "automerge": true,
+    "schedule": ["before 4am on sunday"]
+  },
+
+  "python": {
+    "additionalBranchPrefix": "{{parentDir}}-",
+    "fileMatch": ["(^|/)requirements.*\\.txt$", "(^|/)pyproject\\.toml$", "(^|/)setup\\.py$"]
+  },
+
+  "docker": {
+    "enabled": true,
+    "fileMatch": ["(^|/|\\.)Dockerfile$", "(^|/)docker-compose.*\\.ya?ml$"],
+    "pinDigests": true
+  },
+
+  "github-actions": {
+    "enabled": true,
+    "fileMatch": ["\\.github/workflows/.*\\.ya?ml$"],
+    "pinDigests": true
+  },
+
+  "pre-commit": {
+    "enabled": true,
+    "fileMatch": ["\\.pre-commit-config\\.yaml$"]
+  },
+
+  "customManagers": [
+    {
+      "customType": "regex",
+      "fileMatch": ["(^|/)requirements.*\\.txt$"],
+      "matchStrings": ["# renovate: datasource=(?<datasource>.*?) depName=(?<depName>.*?)\\s.*[>=]=(?<currentValue>.*)"],
+      "datasourceTemplate": "{{datasource}}"
+    }
+  ],
+
+  "labels": [
+    "dependencies",
+    "renovate"
+  ],
+
+  "commitMessagePrefix": "chore(deps):",
+  "commitMessageAction": "update",
+  "commitMessageTopic": "{{depName}}",
+  "commitMessageExtra": "to {{newVersion}}",
+
+  "prTitle": "{{commitMessage}} {{#unless isSingleCommit}}({{updateType}}){{/unless}}",
+  
+  "prBodyTemplate": "This PR contains the following updates:\n\n| Package | Change | Age | Adoption | Passing | Confidence |\n|---|---|---|---|---|---|\n{{#each upgrades as |upgrade|}}\n|{{upgrade.depName}}|{{#if upgrade.displayFrom}}`{{upgrade.displayFrom}}` -> {{/if}}{{#if upgrade.displayTo}}`{{upgrade.displayTo}}`{{/if}}|[![age](https://developer.mend.io/api/mc/badges/age/{{upgrade.datasource}}/{{upgrade.depName}}/{{upgrade.newVersion}}?slim=true)](https://docs.renovatebot.com/merge-confidence/)|[![adoption](https://developer.mend.io/api/mc/badges/adoption/{{upgrade.datasource}}/{{upgrade.depName}}/{{upgrade.newVersion}}?slim=true)](https://docs.renovatebot.com/merge-confidence/)|[![passing](https://developer.mend.io/api/mc/badges/compatibility/{{upgrade.datasource}}/{{upgrade.depName}}/{{upgrade.currentVersion}}/{{upgrade.newVersion}}?slim=true)](https://docs.renovatebot.com/merge-confidence/)|[![confidence](https://developer.mend.io/api/mc/badges/confidence/{{upgrade.datasource}}/{{upgrade.depName}}/{{upgrade.currentVersion}}/{{upgrade.newVersion}}?slim=true)](https://docs.renovatebot.com/merge-confidence/)|\n{{/each}}\n\n---\n\n📅 **Schedule**: {{schedule}} in timezone {{timezone}}.\n🚦 **Automerge**: {{automerge}}.\n♻ **Rebasing**: {{rebaseWhen}}.\n🔕 **Ignore**: Close this PR and you won't be reminded about {{#unless isSingleCommit}}these updates{{else}}this update{{/unless}} again.\n\n---\n\n{{#if hasReleaseNotes}}\n{{#each upgrades as |upgrade|}}\n{{#if upgrade.hasReleaseNotes}}\n### Release Notes\n\n{{#each upgrade.releases as |release|}}\n<details>\n<summary>{{release.version}}</summary>\n\n{{release.compare}}\n\n{{#if release.releaseNotes}}{{release.releaseNotes}}{{/if}}\n</details>\n{{/each}}\n{{/if}}\n{{/each}}\n{{/if}}\n\n---\n\nThis PR has been generated by [Renovate Bot](https://github.com/renovatebot/renovate)."
+}

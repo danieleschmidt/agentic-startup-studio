@@ -1,0 +1,71 @@
+# Global ownership for Terragon Labs Agentic Startup Studio
+# See: https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default ownership - all files require review from core team
+* @terragonlabs/core-team @terragonlabs/architecture-review
+
+# Architecture and Design Documents
+/docs/adr/ @terragonlabs/architecture-review @terragonlabs/senior-engineers
+/ARCHITECTURE.md @terragonlabs/architecture-review
+/docs/system-architecture.md @terragonlabs/architecture-review
+/docs/enhanced-system-architecture.md @terragonlabs/architecture-review
+
+# Core Pipeline and Business Logic
+/pipeline/ @terragonlabs/backend-team @terragonlabs/ai-team
+/core/ @terragonlabs/backend-team @terragonlabs/ai-team
+/agents/ @terragonlabs/ai-team
+
+# Configuration and Infrastructure
+/docker-compose*.yml @terragonlabs/devops-team @terragonlabs/core-team
+/Dockerfile @terragonlabs/devops-team @terragonlabs/core-team
+/.devcontainer/ @terragonlabs/devops-team
+/monitoring/ @terragonlabs/devops-team @terragonlabs/sre-team
+/grafana/ @terragonlabs/devops-team @terragonlabs/sre-team
+
+# Security and Compliance
+/security/ @terragonlabs/security-team @terragonlabs/core-team
+/.pre-commit-config.yaml @terragonlabs/security-team @terragonlabs/core-team
+/scripts/security_scan.py @terragonlabs/security-team
+/scripts/validate_production_secrets.py @terragonlabs/security-team
+
+# CI/CD and Automation
+/.github/ @terragonlabs/devops-team @terragonlabs/core-team
+/scripts/build*.py @terragonlabs/devops-team
+/scripts/release.py @terragonlabs/devops-team
+/scripts/validate_deployment.py @terragonlabs/devops-team
+
+# Testing Infrastructure
+/tests/ @terragonlabs/qa-team @terragonlabs/backend-team
+/tests/framework/ @terragonlabs/qa-team @terragonlabs/senior-engineers
+/tests/e2e/ @terragonlabs/qa-team @terragonlabs/backend-team
+/tests/integration/ @terragonlabs/qa-team @terragonlabs/backend-team
+/pytest.ini @terragonlabs/qa-team @terragonlabs/core-team
+/pyproject.toml @terragonlabs/core-team
+
+# API and External Interfaces
+/pipeline/api/ @terragonlabs/backend-team @terragonlabs/api-team
+/tools/ @terragonlabs/integrations-team @terragonlabs/backend-team
+
+# Database and Migrations
+/db/ @terragonlabs/data-team @terragonlabs/backend-team
+/pipeline/storage/ @terragonlabs/data-team @terragonlabs/backend-team
+
+# Documentation (lighter review requirements)
+/README.md @terragonlabs/core-team
+/docs/ @terragonlabs/documentation-team @terragonlabs/core-team
+/CONTRIBUTING.md @terragonlabs/core-team
+/CHANGELOG.md @terragonlabs/core-team
+
+# Package Management
+/requirements.txt @terragonlabs/core-team @terragonlabs/security-team
+/uv.lock @terragonlabs/core-team
+/setup.py @terragonlabs/core-team
+
+# Legal and Compliance
+/LICENSE @terragonlabs/legal-team @terragonlabs/core-team
+/CODE_OF_CONDUCT.md @terragonlabs/legal-team @terragonlabs/core-team
+/SECURITY.md @terragonlabs/security-team @terragonlabs/legal-team
+
+# Special Files Requiring Multiple Approvals
+/pyproject.toml @terragonlabs/core-team @terragonlabs/security-team @terragonlabs/backend-team
+/.github/workflows/ @terragonlabs/devops-team @terragonlabs/security-team @terragonlabs/core-team
