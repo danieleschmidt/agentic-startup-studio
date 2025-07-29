@@ -32,45 +32,161 @@
   "customizations": {
     "vscode": {
       "extensions": [
+        // Python Development Core
         "ms-python.python",
         "ms-python.black-formatter",
         "ms-python.isort",
         "charliermarsh.ruff",
         "ms-python.mypy-type-checker",
-        "ms-vscode.test-adapter-converter",
-        "ms-vscode.extension-test-runner",
-        "redhat.vscode-yaml",
-        "ms-vscode.vscode-json",
-        "bradlc.vscode-tailwindcss",
+        "ms-python.pylint",
+        "ms-python.debugpy",
+        
+        // AI Code Assistance (Advanced)
         "github.copilot",
         "github.copilot-chat",
+        "codeium.codeium",
+        "tabnine.tabnine-vscode",
+        
+        // Testing & Quality
+        "ms-vscode.test-adapter-converter",
+        "ms-vscode.extension-test-runner",
+        "ms-python.pytest",
+        "ryanluker.vscode-coverage-gutters",
+        "sonarsource.sonarlint-vscode",
+        
+        // Database & API Tools
+        "mtxr.sqltools",
+        "mtxr.sqltools-driver-pg",
+        "humao.rest-client",
+        "42crunch.vscode-openapi",
+        
+        // Infrastructure & DevOps
         "ms-vscode.vscode-docker",
         "ms-kubernetes-tools.vscode-kubernetes-tools",
+        "redhat.vscode-yaml",
+        "ms-vscode.vscode-json",
+        "github.vscode-github-actions",
+        
+        // Development Experience
         "ms-vscode.makefile-tools",
         "tamasfe.even-better-toml",
-        "github.vscode-github-actions",
         "ms-vscode.hexeditor",
-        "ms-vscode.live-server",
         "esbenp.prettier-vscode",
         "streetsidesoftware.code-spell-checker",
         "gruntfuggly.todo-tree",
+        
+        // Git & Collaboration
         "eamodio.gitlens",
-        "ms-vscode.vscode-github-issue-notebooks"
+        "mhutchie.git-graph",
+        "github.vscode-pull-request-github",
+        "ms-vscode.vscode-github-issue-notebooks",
+        
+        // Documentation & Markdown
+        "yzhang.markdown-all-in-one",
+        "davidanson.vscode-markdownlint",
+        "bierner.markdown-mermaid",
+        
+        // Performance & Monitoring
+        "ms-vscode.vscode-json",
+        "redhat.vscode-xml"
       ],
       "settings": {
+        // Python Configuration (Enhanced)
         "python.defaultInterpreterPath": "/usr/local/bin/python",
+        "python.terminal.activateEnvironment": true,
+        "python.analysis.autoImportCompletions": true,
+        "python.analysis.typeCheckingMode": "strict",
+        "python.analysis.aiAssist": true,
+        "python.analysis.packageIndexDepths": [
+          {"name": "pipeline", "depth": 3},
+          {"name": "core", "depth": 3},
+          {"name": "agents", "depth": 2}
+        ],
+        
+        // AI Code Assistance (Advanced)
+        "github.copilot.enable": {
+          "*": true,
+          "yaml": true,
+          "plaintext": false,
+          "markdown": true,
+          "python": true
+        },
+        "github.copilot.advanced": {
+          "length": 500,
+          "temperature": 0.1
+        },
+        "codeium.enableCodeLens": true,
+        "codeium.enableSearch": true,
+        "tabnine.experimentalAutoImports": true,
+        
+        // Code Quality & Formatting
         "python.linting.enabled": true,
         "python.linting.pylintEnabled": false,
         "python.linting.ruffEnabled": true,
         "python.formatting.provider": "black",
         "python.sortImports.args": ["--profile", "black"],
+        "editor.formatOnSave": true,
+        "editor.codeActionsOnSave": {
+          "source.organizeImports": "explicit",
+          "source.fixAll.ruff": "explicit",
+          "source.fixAll.sonarlint": "explicit"
+        },
+        "ruff.args": ["--config=pyproject.toml"],
+        
+        // Testing & Coverage
         "python.testing.pytestEnabled": true,
         "python.testing.unittestEnabled": false,
+        "python.testing.autoTestDiscoverOnSaveEnabled": true,
+        "testing.automaticallyOpenPeekView": "never",
         "python.testing.pytestArgs": [
           "tests",
           "--verbose",
-          "--tb=short"
+          "--tb=short",
+          "--cov=pipeline",
+          "--cov=core"
         ],
+        "coverage-gutters.configPath": ".coveragerc",
+        "coverage-gutters.showGutterCoverage": true,
+        "coverage-gutters.showLineCoverage": true,
+        
+        // Database & API Tools
+        "sqltools.connections": [
+          {
+            "name": "Local PostgreSQL",
+            "driver": "PostgreSQL",
+            "previewLimit": 50,
+            "server": "localhost",
+            "port": 5432,
+            "database": "startup_studio",
+            "username": "postgres",
+            "askForPassword": true
+          }
+        ],
+        "rest-client.environmentVariables": {
+          "local": {
+            "baseUrl": "http://localhost:8000"
+          }
+        },
+        
+        // Git & Version Control (Enhanced)
+        "git.autofetch": true,
+        "git.confirmSync": false,
+        "git.enableSmartCommit": true,
+        "gitlens.advanced.messages": {
+          "suppressShowKeyBindingsNotice": true
+        },
+        "gitlens.currentLine.enabled": true,
+        "gitlens.hovers.currentLine.over": "line",
+        
+        // Editor Experience
+        "editor.suggestSelection": "first",
+        "editor.tabCompletion": "on",
+        "editor.wordBasedSuggestions": false,
+        "editor.rulers": [88, 120],
+        "intellicode.modify.editor.suggestSelection": "automaticallyOverrideDefaultValue",
+        "editor.inlineSuggest.enabled": true,
+        
+        // File Management
         "files.exclude": {
           "**/__pycache__": true,
           "**/*.pyc": true,
@@ -78,28 +194,61 @@
           ".coverage": true,
           "htmlcov": true,
           ".ruff_cache": true,
-          ".mypy_cache": true
+          ".mypy_cache": true,
+          "**/.DS_Store": true,
+          "**/Thumbs.db": true
         },
-        "editor.formatOnSave": true,
-        "editor.codeActionsOnSave": {
-          "source.organizeImports": "explicit",
-          "source.fixAll.ruff": "explicit"
+        "files.watcherExclude": {
+          "**/.git/objects/**": true,
+          "**/.git/subtree-cache/**": true,
+          "**/node_modules/*/**": true,
+          "**/__pycache__/**": true,
+          "**/.pytest_cache/**": true
         },
         "files.trimTrailingWhitespace": true,
         "files.insertFinalNewline": true,
-        "editor.rulers": [88, 120],
-        "python.analysis.typeCheckingMode": "basic",
+        
+        // Terminal & Environment
+        "terminal.integrated.defaultProfile.linux": "zsh",
+        "terminal.integrated.env.linux": {
+          "PYTHONPATH": "${workspaceFolder}",
+          "ENVIRONMENT": "development",
+          "OPENAI_API_KEY": "${localEnv:OPENAI_API_KEY}",
+          "DATABASE_URL": "postgresql://postgres:postgres@localhost:5432/startup_studio"
+        },
+        
+        // Development Tools
         "todo-tree.general.tags": [
           "BUG",
-          "HACK",
+          "HACK", 
           "FIXME",
           "TODO",
           "XXX",
+          "NOTE",
+          "OPTIMIZE",
           "[ ]",
           "[x]"
         ],
-        "git.autofetch": true,
-        "terminal.integrated.defaultProfile.linux": "zsh"
+        "todo-tree.highlights.customHighlight": {
+          "TODO": {
+            "icon": "check",
+            "type": "line",
+            "foreground": "#FFD700"
+          },
+          "FIXME": {
+            "icon": "bug",
+            "type": "line", 
+            "foreground": "#FF6B6B"
+          }
+        },
+        
+        // Markdown & Documentation
+        "markdown.preview.breaks": true,
+        "markdown.preview.linkify": true,
+        "markdownlint.config": {
+          "MD013": false,
+          "MD033": false
+        }
       }
     }
   },
