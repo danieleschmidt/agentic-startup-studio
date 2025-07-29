@@ -1,0 +1,113 @@
+# Dependabot configuration for automated dependency updates
+# This enables automated security updates and dependency management
+# Reference: https://docs.github.com/en/code-security/dependabot
+
+version: 2
+updates:
+  # Python dependencies
+  - package-ecosystem: "pip"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 5
+    reviewers:
+      - "terragonlabs/security-team"
+    assignees:
+      - "terragonlabs/maintainers"
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+    # Group related updates
+    groups:
+      ai-ml-dependencies:
+        patterns:
+          - "openai*"
+          - "langchain*"
+          - "langgraph*"
+          - "sentence-transformers*"
+          - "google-generativeai*"
+        update-types:
+          - "minor"
+          - "patch"
+      fastapi-ecosystem:
+        patterns:
+          - "fastapi*"
+          - "uvicorn*"
+          - "pydantic*"
+          - "starlette*"
+        update-types:
+          - "minor"
+          - "patch"
+      database-ecosystem:
+        patterns:
+          - "psycopg*"
+          - "pgvector*"
+          - "sqlmodel*"
+          - "asyncpg*"
+        update-types:
+          - "patch"
+      testing-ecosystem:
+        patterns:
+          - "pytest*"
+          - "coverage*"
+          - "hypothesis*"
+        update-types:
+          - "minor"
+          - "patch"
+      security-tools:
+        patterns:
+          - "bandit*"
+          - "safety*"
+        update-types:
+          - "minor"
+          - "patch"
+    # Security updates for critical vulnerabilities
+    target-branch: "main"
+    allow:
+      - dependency-type: "direct"
+      - dependency-type: "indirect"
+    ignore:
+      # Ignore major version updates for stability
+      - dependency-name: "*"
+        update-types: ["version-update:semver-major"]
+    
+  # GitHub Actions dependencies
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "first-monday"
+      time: "06:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 3
+    reviewers:
+      - "terragonlabs/devops-team"
+    commit-message:
+      prefix: "ci"
+    target-branch: "main"
+    
+  # Docker dependencies
+  - package-ecosystem: "docker"
+    directory: "/"
+    schedule:
+      interval: "monthly"
+      day: "second-monday"
+      time: "06:00"
+      timezone: "America/Los_Angeles"
+    open-pull-requests-limit: 2
+    reviewers:
+      - "terragonlabs/infrastructure-team"
+    commit-message:
+      prefix: "docker"
+    # Group base image updates
+    groups:
+      base-images:
+        patterns:
+          - "python*"
+          - "postgres*"
+          - "redis*"
+          - "nginx*"
+    target-branch: "main"
