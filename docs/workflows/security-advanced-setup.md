@@ -1,3 +1,24 @@
+# Advanced Security Workflow Setup Guide
+*Terragon Labs Agentic Startup Studio*
+
+> **🔒 IMPORTANT**: This workflow contains sensitive security configurations and should be manually reviewed and implemented by the security team.
+
+## Overview
+
+This document provides the complete configuration for an advanced security scanning workflow that implements:
+- SLSA Level 3 compliance preparation
+- SBOM (Software Bill of Materials) generation  
+- Multi-layered security scanning
+- Container and Infrastructure as Code security
+- License compliance checking
+
+## Manual Setup Instructions
+
+### Step 1: Create the Workflow File
+
+Create `.github/workflows/security-advanced.yml` with the following content:
+
+```yaml
 # Advanced Security Workflow for Terragon Labs
 # Implements SLSA Level 3 compliance, SBOM generation, and comprehensive security scanning
 
@@ -324,3 +345,45 @@ jobs:
           name: slsa-provenance-${{ github.sha }}
           path: provenance.intoto.jsonl
           retention-days: 90
+```
+
+### Step 2: Required Permissions
+
+Ensure the repository has the following permissions enabled:
+- Actions: Read
+- Contents: Read
+- Security events: Write
+- ID token: Write (for SLSA provenance)
+- Attestations: Write
+
+### Step 3: Security Team Review
+
+Before implementing:
+1. **Security team review** of all scanning configurations
+2. **Verify tool versions** match your security requirements
+3. **Customize thresholds** for vulnerability counts as needed
+4. **Test in staging** environment first
+
+### Step 4: Integration with Existing CI
+
+This workflow is designed to complement, not replace, your existing CI pipeline. It runs:
+- On all PRs and pushes to main/dev
+- Daily at 2 AM UTC for comprehensive scanning
+- On-demand via workflow dispatch
+
+## Benefits
+
+✅ **SLSA Level 3 Compliance**: Supply chain security with provenance generation  
+✅ **SBOM Generation**: Software Bill of Materials for enterprise compliance  
+✅ **Multi-layered Security**: SAST, dependency, container, and IaC scanning  
+✅ **License Compliance**: Automated checking for problematic licenses  
+✅ **Enterprise Ready**: Comprehensive reporting and artifact retention
+
+## Security Considerations
+
+- **Secrets Management**: Ensure all API keys are stored in GitHub Secrets
+- **Workflow Permissions**: Use minimal required permissions only
+- **Artifact Retention**: Security scan results retained for 30 days
+- **False Positive Management**: Tune thresholds based on your risk tolerance
+
+*This workflow should be manually created and reviewed by the security team before implementation.*
