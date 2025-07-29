@@ -10,104 +10,72 @@ updates:
     schedule:
       interval: "weekly"
       day: "monday"
-      time: "06:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 5
+      time: "09:00"
+    open-pull-requests-limit: 10
     reviewers:
-      - "terragonlabs/security-team"
+      - "terragon-labs/core-team"
     assignees:
-      - "terragonlabs/maintainers"
+      - "terragon-labs/security-team"
     commit-message:
       prefix: "deps"
       prefix-development: "deps-dev"
-    # Group related updates
+      include: "scope"
+    labels:
+      - "dependencies"
+      - "python"
+    ignore:
+      # Ignore major version updates for critical dependencies
+      - dependency-name: "langchain*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "fastapi"
+        update-types: ["version-update:semver-major"]
     groups:
-      ai-ml-dependencies:
-        patterns:
-          - "openai*"
-          - "langchain*"
-          - "langgraph*"
-          - "sentence-transformers*"
-          - "google-generativeai*"
-        update-types:
-          - "minor"
-          - "patch"
-      fastapi-ecosystem:
-        patterns:
-          - "fastapi*"
-          - "uvicorn*"
-          - "pydantic*"
-          - "starlette*"
-        update-types:
-          - "minor"
-          - "patch"
-      database-ecosystem:
-        patterns:
-          - "psycopg*"
-          - "pgvector*"
-          - "sqlmodel*"
-          - "asyncpg*"
-        update-types:
-          - "patch"
-      testing-ecosystem:
+      testing-dependencies:
         patterns:
           - "pytest*"
           - "coverage*"
-          - "hypothesis*"
-        update-types:
-          - "minor"
-          - "patch"
-      security-tools:
+          - "factory-boy"
+          - "httpx"
+      linting-dependencies:
+        patterns:
+          - "ruff"
+          - "black"
+          - "isort"
+          - "mypy"
+      security-dependencies:
         patterns:
           - "bandit*"
-          - "safety*"
-        update-types:
-          - "minor"
-          - "patch"
-    # Security updates for critical vulnerabilities
-    target-branch: "main"
-    allow:
-      - dependency-type: "direct"
-      - dependency-type: "indirect"
-    ignore:
-      # Ignore major version updates for stability
-      - dependency-name: "*"
-        update-types: ["version-update:semver-major"]
-    
-  # GitHub Actions dependencies
+          - "safety"
+          - "cryptography"
+
+  # GitHub Actions
   - package-ecosystem: "github-actions"
     directory: "/"
     schedule:
-      interval: "monthly"
-      day: "first-monday"
-      time: "06:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 3
+      interval: "weekly"
+      day: "tuesday"
+      time: "09:00"
     reviewers:
-      - "terragonlabs/devops-team"
+      - "terragon-labs/devops-team"
     commit-message:
       prefix: "ci"
-    target-branch: "main"
-    
+      include: "scope"
+    labels:
+      - "ci-cd"
+      - "github-actions"
+
   # Docker dependencies
   - package-ecosystem: "docker"
     directory: "/"
     schedule:
-      interval: "monthly"
-      day: "second-monday"
-      time: "06:00"
-      timezone: "America/Los_Angeles"
-    open-pull-requests-limit: 2
+      interval: "weekly"
+      day: "wednesday"
+      time: "09:00"
     reviewers:
-      - "terragonlabs/infrastructure-team"
+      - "terragon-labs/infrastructure-team"
     commit-message:
       prefix: "docker"
-    # Group base image updates
-    groups:
-      base-images:
-        patterns:
-          - "python*"
-          - "postgres*"
-          - "redis*"
-          - "nginx*"
-    target-branch: "main"
+      include: "scope"
+    labels:
+      - "docker"
+      - "infrastructure"
