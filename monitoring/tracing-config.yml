@@ -1,0 +1,188 @@
+# OpenTelemetry Tracing Configuration for Multi-Agent Workflows
+# This configuration provides distributed tracing across all AI agents
+
+# OpenTelemetry Collector Configuration
+receivers:
+  otlp:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:4317
+      http:
+        endpoint: 0.0.0.0:4318
+        cors:
+          allowed_origins:
+            - http://*
+            - https://*
+
+  jaeger:
+    protocols:
+      grpc:
+        endpoint: 0.0.0.0:14250
+      thrift_http:
+        endpoint: 0.0.0.0:14268
+      thrift_compact:
+        endpoint: 0.0.0.0:6831
+      thrift_binary:
+        endpoint: 0.0.0.0:6832
+
+processors:
+  batch:
+    timeout: 1s
+    send_batch_size: 8192
+    send_batch_max_size: 16384
+
+  # Add resource attributes for AI agents
+  resource:
+    attributes:
+      - key: service.name
+        value: agentic-startup-studio
+        action: insert
+      - key: service.version
+        from_attribute: app.version
+        action: insert
+      - key: deployment.environment
+        from_attribute: env
+        action: insert
+
+  # Memory limiter to prevent OOM
+  memory_limiter:
+    limit_mib: 512
+    spike_limit_mib: 128
+    check_interval: 5s
+
+  # Filter out noisy spans
+  filter:
+    traces:
+      span:
+        - 'attributes["http.url"] == "/health"'
+        - 'attributes["http.url"] == "/metrics"'
+        - 'name == "heartbeat"'
+
+  # Add AI-specific attributes
+  attributes:
+    actions:
+      - key: ai.agent.type
+        action: insert
+        from_attribute: agent_type
+      - key: ai.model.name
+        action: insert
+        from_attribute: model_name
+      - key: ai.workflow.stage
+        action: insert
+        from_attribute: workflow_stage
+      - key: ai.token.count
+        action: insert
+        from_attribute: token_count
+
+exporters:
+  # Export to Jaeger
+  jaeger:
+    endpoint: jaeger:14250
+    tls:
+      insecure: true
+
+  # Export to Prometheus for metrics
+  prometheus:
+    endpoint: "0.0.0.0:8889"
+    namespace: otel
+    const_labels:
+      service: agentic-startup-studio
+
+  # Logging exporter for debugging
+  logging:
+    loglevel: info
+    sampling_initial: 5
+    sampling_thereafter: 200
+
+  # OTLP exporter for cloud providers
+  otlp/cloud:
+    endpoint: ${OTEL_CLOUD_ENDPOINT}
+    headers:
+      api-key: ${OTEL_CLOUD_API_KEY}
+    compression: gzip
+
+service:
+  pipelines:
+    traces:
+      receivers: [otlp, jaeger]
+      processors: [memory_limiter, batch, resource, filter, attributes]
+      exporters: [jaeger, logging]
+    
+    # Metrics pipeline for trace-derived metrics
+    metrics:
+      receivers: [otlp]
+      processors: [memory_limiter, batch, resource]
+      exporters: [prometheus]
+
+  extensions: [health_check, pprof, zpages]
+  
+  # Telemetry configuration
+  telemetry:
+    logs:
+      level: info
+    metrics:
+      level: detailed
+      address: 0.0.0.0:8888
+
+extensions:
+  health_check:
+    endpoint: 0.0.0.0:13133
+  
+  pprof:
+    endpoint: 0.0.0.0:1777
+  
+  zpages:
+    endpoint: 0.0.0.0:55679
+
+# AI Agent Specific Configurations
+ai_agent_tracing:
+  # Automatically instrument AI agent calls
+  auto_instrument:
+    enabled: true
+    libraries:
+      - openai
+      - anthropic  
+      - langchain
+      - langgraph
+    
+  # Custom span naming for AI operations
+  span_naming:
+    ai_calls: "ai.{model_provider}.{operation}"
+    agent_workflows: "agent.{agent_type}.{workflow_stage}"
+    pipeline_stages: "pipeline.{stage_name}"
+  
+  # Sampling configuration for high-volume AI operations
+  sampling:
+    # Sample 100% of errors and slow operations
+    error_sampling_rate: 1.0
+    slow_operation_threshold: 30s
+    slow_operation_sampling_rate: 1.0
+    
+    # Sample 10% of normal operations
+    default_sampling_rate: 0.1
+    
+    # Always sample specific operations
+    always_sample_operations:
+      - "agent.ceo.pitch_generation"
+      - "agent.cto.technical_validation"
+      - "agent.investor.scoring"
+  
+  # Custom attributes for AI operations
+  custom_attributes:
+    # Add cost tracking
+    - name: "ai.cost.tokens"
+      extract_from: "response.usage.total_tokens"
+    - name: "ai.cost.usd"
+      extract_from: "response.cost_usd"
+    
+    # Add performance metrics
+    - name: "ai.latency.ttfb"
+      extract_from: "response.time_to_first_byte"
+    - name: "ai.quality.score"
+      extract_from: "response.quality_score"
+    
+    # Add business context
+    - name: "business.idea.category"
+      extract_from: "context.idea_category"
+    - name: "business.stage"
+      extract_from: "context.business_stage"

@@ -1,0 +1,119 @@
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: agentic-startup-studio-hpa
+  namespace: agentic-startup-studio
+  labels:
+    app.kubernetes.io/name: agentic-startup-studio
+    app.kubernetes.io/component: autoscaling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: agentic-startup-studio
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 70
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 80
+  # Custom metrics for AI workloads
+  - type: Pods
+    pods:
+      metric:
+        name: ai_agent_queue_depth
+      target:
+        type: AverageValue
+        averageValue: "10"
+  - type: Pods
+    pods:
+      metric:
+        name: ai_agent_processing_time_seconds
+      target:
+        type: AverageValue
+        averageValue: "30"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+      - type: Percent
+        value: 10
+        periodSeconds: 60
+      - type: Pods
+        value: 2
+        periodSeconds: 60
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+      - type: Percent
+        value: 50
+        periodSeconds: 60
+      - type: Pods
+        value: 4
+        periodSeconds: 60
+      selectPolicy: Max
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: ai-agent-worker-hpa
+  namespace: agentic-startup-studio
+  labels:
+    app.kubernetes.io/name: ai-agent-worker
+    app.kubernetes.io/component: autoscaling
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: ai-agent-worker
+  minReplicas: 2
+  maxReplicas: 10
+  metrics:
+  - type: Resource
+    resource:
+      name: cpu
+      target:
+        type: Utilization
+        averageUtilization: 75
+  - type: Resource
+    resource:
+      name: memory
+      target:
+        type: Utilization
+        averageUtilization: 85
+  # AI-specific scaling metrics
+  - type: Pods
+    pods:
+      metric:
+        name: ai_workflow_queue_size
+      target:
+        type: AverageValue
+        averageValue: "5"
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600  # 10 minutes - AI workloads need longer stabilization
+      policies:
+      - type: Percent
+        value: 25
+        periodSeconds: 300
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 120  # 2 minutes for faster scale up
+      policies:
+      - type: Percent
+        value: 100
+        periodSeconds: 60
+      - type: Pods
+        value: 3
+        periodSeconds: 60
+      selectPolicy: Max

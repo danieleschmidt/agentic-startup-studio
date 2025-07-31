@@ -1,0 +1,66 @@
+apiVersion: v2
+name: agentic-startup-studio
+description: A Helm chart for deploying the Agentic Startup Studio AI/ML platform
+type: application
+version: 1.0.0
+appVersion: "1.0.0"
+home: https://terragon.ai
+sources:
+  - https://github.com/terragon-labs/agentic-startup-studio
+maintainers:
+  - name: Terragon Labs SRE Team
+    email: sre@terragon.ai
+    url: https://terragon.ai
+keywords:
+  - ai
+  - ml
+  - startup
+  - agents
+  - langgraph
+  - openai
+annotations:
+  category: AI/ML Platform
+  licenses: MIT
+  images: |
+    - name: agentic-startup-studio
+      image: terragon/agentic-startup-studio:1.0.0
+    - name: postgresql
+      image: postgres:15-alpine
+    - name: redis
+      image: redis:7-alpine
+    - name: postgres-exporter
+      image: prometheuscommunity/postgres-exporter:v0.12.1
+    - name: redis-exporter
+      image: oliver006/redis_exporter:v1.50.0
+
+dependencies:
+  - name: postgresql
+    version: "12.1.9"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: postgresql.enabled
+    tags:
+      - database
+  - name: redis
+    version: "17.15.6"
+    repository: "https://charts.bitnami.com/bitnami"
+    condition: redis.enabled
+    tags:
+      - cache
+  - name: prometheus
+    version: "25.8.0"
+    repository: "https://prometheus-community.github.io/helm-charts"
+    condition: monitoring.prometheus.enabled
+    tags:
+      - monitoring
+  - name: grafana
+    version: "7.0.19"
+    repository: "https://grafana.github.io/helm-charts"
+    condition: monitoring.grafana.enabled
+    tags:
+      - monitoring
+  - name: jaeger
+    version: "0.71.17"
+    repository: "https://jaegertracing.github.io/helm-charts"
+    condition: monitoring.jaeger.enabled
+    tags:
+      - tracing

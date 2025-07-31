@@ -1,0 +1,311 @@
+# Service Level Indicators (SLIs) and Service Level Objectives (SLOs)
+# for AI/ML Agentic Startup Studio
+
+# Global SLO Configuration
+global:
+  evaluation_interval: 30s
+  alerting_interval: 15s
+  notification_channels:
+    - slack: "#alerts-ai-agents"
+    - pagerduty: "ai-agents-escalation"
+    - email: "sre-team@terragon.ai"
+
+# Core System SLIs/SLOs
+system_slos:
+  # API Availability SLO
+  api_availability:
+    name: "API Availability"
+    description: "Percentage of successful HTTP requests"
+    sli_query: |
+      sum(rate(http_requests_total{code!~"5.."}[5m])) /
+      sum(rate(http_requests_total[5m]))
+    slo_target: 0.999  # 99.9% availability
+    slo_window: "30d"
+    burn_rate_thresholds:
+      critical: 14.4    # 2% of error budget in 1 hour
+      warning: 6        # 5% of error budget in 6 hours
+    alerts:
+      - name: "API Availability Critical"
+        condition: "< 0.995"  # 99.5%
+        duration: "2m"
+        severity: "critical"
+      - name: "API Availability Warning"
+        condition: "< 0.998"  # 99.8%
+        duration: "5m"
+        severity: "warning"
+
+  # API Latency SLO
+  api_latency:
+    name: "API Response Latency"
+    description: "95th percentile of API response times"
+    sli_query: |
+      histogram_quantile(0.95,
+        rate(http_request_duration_seconds_bucket[5m])
+      )
+    slo_target: 2.0  # 2 seconds for 95th percentile
+    slo_window: "30d"
+    alerts:
+      - name: "API Latency Critical"
+        condition: "> 5.0"  # 5 seconds
+        duration: "2m"
+        severity: "critical"
+      - name: "API Latency Warning"
+        condition: "> 3.0"  # 3 seconds
+        duration: "5m"
+        severity: "warning"
+
+# AI Agent Specific SLIs/SLOs
+ai_agent_slos:
+  # AI Agent Success Rate
+  agent_success_rate:
+    name: "AI Agent Success Rate"
+    description: "Percentage of successful AI agent operations"
+    sli_query: |
+      sum(rate(ai_agent_operations_total{status="success"}[5m])) by (agent_type) /
+      sum(rate(ai_agent_operations_total[5m])) by (agent_type)
+    slo_target: 0.95  # 95% success rate
+    slo_window: "24h"
+    per_agent_targets:
+      ceo: 0.98      # CEO agent should be highly reliable
+      cto: 0.95      # CTO agent technical operations
+      investor: 0.90  # Investor scoring can be more variable
+    alerts:
+      - name: "AI Agent Success Rate Critical"
+        condition: "< 0.90"  # 90%
+        duration: "5m"
+        severity: "critical"
+        labels:
+          runbook: "https://docs.terragon.ai/runbooks/ai-agent-failures"
+      - name: "AI Agent Success Rate Warning"
+        condition: "< 0.93"  # 93%
+        duration: "10m"
+        severity: "warning"
+
+  # AI Agent Processing Time
+  agent_processing_time:
+    name: "AI Agent Processing Time"
+    description: "95th percentile processing time for AI agents"
+    sli_query: |
+      histogram_quantile(0.95,
+        rate(ai_agent_processing_duration_seconds_bucket[5m])
+      ) by (agent_type)
+    slo_target: 30.0  # 30 seconds for 95th percentile
+    slo_window: "24h"
+    per_agent_targets:
+      ceo: 45.0       # CEO operations can take longer
+      cto: 60.0       # Technical validation takes time
+      investor: 20.0  # Quick scoring decisions
+    alerts:
+      - name: "AI Agent Processing Time Critical"
+        condition: "> 120.0"  # 2 minutes
+        duration: "3m"
+        severity: "critical"
+      - name: "AI Agent Processing Time Warning"
+        condition: "> 60.0"   # 1 minute
+        duration: "5m"
+        severity: "warning"
+
+  # Token Usage Efficiency
+  token_efficiency:
+    name: "Token Usage Efficiency"
+    description: "Average tokens per successful operation"
+    sli_query: |
+      sum(rate(ai_tokens_consumed_total[5m])) by (agent_type) /
+      sum(rate(ai_agent_operations_total{status="success"}[5m])) by (agent_type)
+    slo_target: 2000  # Average 2000 tokens per operation
+    slo_window: "24h"
+    per_agent_targets:
+      ceo: 3000       # CEO operations are more complex
+      cto: 2500       # Technical analysis requires more tokens
+      investor: 1500  # Scoring should be efficient
+    alerts:
+      - name: "Token Usage Inefficiency Warning"
+        condition: "> 5000"  # 5000 tokens average
+        duration: "10m"
+        severity: "warning"
+        labels:
+          cost_impact: "high"
+
+# Business KPI SLIs/SLOs
+business_slos:
+  # Startup Idea Generation Rate
+  idea_generation_rate:
+    name: "Startup Idea Generation Rate"
+    description: "Ideas generated per hour"
+    sli_query: |
+      rate(startup_ideas_generated_total[1h])
+    slo_target: 10.0  # 10 ideas per hour minimum
+    slo_window: "24h"
+    alerts:
+      - name: "Idea Generation Rate Low"
+        condition: "< 5.0"   # 5 ideas per hour
+        duration: "15m"
+        severity: "warning"
+        labels:
+          business_impact: "medium"
+
+  # MVP Deployment Success Rate
+  mvp_deployment_success:
+    name: "MVP Deployment Success Rate"
+    description: "Percentage of successful MVP deployments"
+    sli_query: |
+      sum(rate(mvp_deployments_successful_total[1h])) /
+      sum(rate(mvp_deployments_attempted_total[1h]))
+    slo_target: 0.85  # 85% deployment success
+    slo_window: "24h"
+    alerts:
+      - name: "MVP Deployment Success Critical"
+        condition: "< 0.70"  # 70%
+        duration: "10m"
+        severity: "critical"
+        labels:
+          business_impact: "high"
+
+  # Cost Per Idea Efficiency
+  cost_per_idea:
+    name: "Cost Per Idea (USD)"
+    description: "Average API cost per generated startup idea"
+    sli_query: |
+      sum(rate(api_cost_usd_total[1h])) /
+      sum(rate(startup_ideas_generated_total[1h]))
+    slo_target: 2.0   # $2 maximum per idea
+    slo_window: "24h"
+    alerts:
+      - name: "Cost Per Idea High"
+        condition: "> 5.0"   # $5 per idea
+        duration: "10m"
+        severity: "warning"
+        labels:
+          cost_impact: "high"
+
+# Infrastructure SLIs/SLOs
+infrastructure_slos:
+  # Database Connection Success
+  database_availability:
+    name: "Database Availability"
+    description: "Percentage of successful database connections"
+    sli_query: |
+      sum(rate(database_connections_successful_total[5m])) /
+      sum(rate(database_connections_attempted_total[5m]))
+    slo_target: 0.999  # 99.9% database availability
+    slo_window: "30d"
+    alerts:
+      - name: "Database Availability Critical"
+        condition: "< 0.99"   # 99%
+        duration: "1m"
+        severity: "critical"
+        labels:
+          runbook: "https://docs.terragon.ai/runbooks/database-issues"
+
+  # Memory Usage
+  memory_usage:
+    name: "Memory Usage"
+    description: "System memory utilization percentage"
+    sli_query: |
+      (1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100
+    slo_target: 80.0  # 80% maximum memory usage
+    slo_window: "1h"
+    alerts:
+      - name: "Memory Usage Critical"
+        condition: "> 90.0"  # 90%
+        duration: "2m"
+        severity: "critical"
+      - name: "Memory Usage Warning"
+        condition: "> 85.0"  # 85%
+        duration: "5m"
+        severity: "warning"
+
+# Error Budget Configuration
+error_budgets:
+  api_availability:
+    period: "30d"
+    target: 0.999
+    budget_remaining_alerts:
+      - threshold: 0.25  # 25% remaining
+        severity: "warning"
+        message: "API availability error budget at 25%"
+      - threshold: 0.10  # 10% remaining
+        severity: "critical"
+        message: "API availability error budget critically low"
+
+  ai_agent_success:
+    period: "24h"
+    target: 0.95
+    budget_remaining_alerts:
+      - threshold: 0.20  # 20% remaining
+        severity: "warning"
+        message: "AI agent error budget at 20%"
+
+# Alerting Rules
+alerting_rules:
+  # Multi-burn rate alerts for critical SLOs
+  - name: "API Availability Multi-Burn Rate"
+    rules:
+      - alert: "APIAvailabilityBurnRateCritical"
+        expr: |
+          (
+            sum(rate(http_requests_total{code=~"5.."}[1m])) /
+            sum(rate(http_requests_total[1m]))
+          ) > (14.4 * (1 - 0.999))
+        for: "2m"
+        labels:
+          severity: "critical"
+          service: "api"
+        annotations:
+          summary: "API availability burn rate is critically high"
+          description: "API error rate is consuming error budget too quickly"
+
+  - name: "AI Agent Performance Degradation"
+    rules:
+      - alert: "AIAgentPerformanceDegraded"
+        expr: |
+          (
+            histogram_quantile(0.95,
+              rate(ai_agent_processing_duration_seconds_bucket[5m])
+            ) > 60
+          ) and (
+            sum(rate(ai_agent_operations_total{status="success"}[5m])) /
+            sum(rate(ai_agent_operations_total[5m])) < 0.90
+          )
+        for: "5m"
+        labels:
+          severity: "warning"
+          component: "ai-agents"
+        annotations:
+          summary: "AI agent performance is degraded"
+          description: "High latency and low success rate detected for AI agents"
+
+# SLO Reporting Configuration
+reporting:
+  # Weekly SLO reports
+  weekly_reports:
+    recipients: ["sre-team@terragon.ai", "engineering@terragon.ai"]
+    include_metrics:
+      - api_availability
+      - agent_success_rate
+      - idea_generation_rate
+      - cost_per_idea
+    format: "html"
+    
+  # Monthly business reviews
+  monthly_reviews:
+    recipients: ["leadership@terragon.ai"]
+    include_metrics:
+      - all_business_slos
+      - cost_efficiency_trends
+      - performance_improvements
+    format: "pdf"
+
+# Compliance and Audit
+compliance:
+  # SLO compliance tracking
+  slo_compliance_tracking:
+    enabled: true
+    retention_period: "1y"
+    audit_trail: true
+    
+  # Incident correlation
+  incident_correlation:
+    enabled: true
+    slo_breach_threshold: 0.95  # Correlate incidents when SLO drops below 95%
+    auto_incident_creation: true

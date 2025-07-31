@@ -259,3 +259,227 @@ groups:
         annotations:
           summary: "Duplicate detection accuracy degraded"
           description: "Duplicate detection accuracy is below 90%"
+
+  # ==========================================================================
+  # SLO-Based Alerts (AI/ML Specific)
+  # ==========================================================================
+  - name: slo.ai_agents
+    interval: 30s
+    rules:
+      - alert: AIAgentSLOBreach
+        expr: |
+          (
+            sum(rate(ai_agent_operations_total{status="success"}[5m])) by (agent_type) /
+            sum(rate(ai_agent_operations_total[5m])) by (agent_type)
+          ) < 0.95
+        for: 5m
+        labels:
+          severity: critical
+          team: ai-ml
+          category: slo
+          slo: "ai_agent_success_rate"
+        annotations:
+          summary: "AI Agent SLO breach detected"
+          description: "AI Agent {{ $labels.agent_type }} success rate {{ $value }} is below SLO target of 95%"
+          runbook_url: "https://docs.terragonlabs.com/runbooks/ai-agent-slo-breach"
+          
+      - alert: AIAgentLatencySLOBreach
+        expr: |
+          histogram_quantile(0.95,
+            rate(ai_agent_processing_duration_seconds_bucket[5m])
+          ) > 30
+        for: 3m
+        labels:
+          severity: warning
+          team: ai-ml
+          category: slo
+          slo: "ai_agent_latency"
+        annotations:
+          summary: "AI Agent latency SLO breach"
+          description: "AI Agent 95th percentile latency {{ $value }}s exceeds 30s SLO target"
+          
+      - alert: TokenEfficiencySLOBreach
+        expr: |
+          (
+            sum(rate(ai_tokens_consumed_total[5m])) by (agent_type) /
+            sum(rate(ai_agent_operations_total{status="success"}[5m])) by (agent_type)
+          ) > 2000
+        for: 10m
+        labels:
+          severity: warning
+          team: ai-ml
+          category: slo
+          slo: "token_efficiency"
+        annotations:
+          summary: "Token efficiency SLO breach"
+          description: "AI Agent {{ $labels.agent_type }} using {{ $value }} tokens per operation, exceeding target of 2000"
+
+  # ==========================================================================
+  # Business KPI SLO Alerts
+  # ==========================================================================
+  - name: slo.business_kpis
+    interval: 60s
+    rules:
+      - alert: IdeaGenerationRateSLOBreach
+        expr: rate(startup_ideas_generated_total[1h]) < 10
+        for: 15m
+        labels:
+          severity: warning
+          team: product
+          category: slo
+          slo: "idea_generation_rate"
+        annotations:
+          summary: "Idea generation rate below SLO"
+          description: "Generating {{ $value }} ideas per hour, below target of 10/hour"
+          business_impact: "medium"
+          
+      - alert: MVPDeploymentSLOBreach
+        expr: |
+          (
+            sum(rate(mvp_deployments_successful_total[1h])) /
+            sum(rate(mvp_deployments_attempted_total[1h]))
+          ) < 0.85
+        for: 10m
+        labels:
+          severity: critical
+          team: platform
+          category: slo
+          slo: "mvp_deployment_success"
+        annotations:
+          summary: "MVP deployment success rate below SLO"
+          description: "MVP deployment success rate {{ $value }} is below 85% target"
+          business_impact: "high"
+          
+      - alert: CostPerIdeaSLOBreach
+        expr: |
+          (
+            sum(rate(api_cost_usd_total[1h])) /
+            sum(rate(startup_ideas_generated_total[1h]))
+          ) > 2.0
+        for: 10m
+        labels:
+          severity: warning
+          team: finance
+          category: slo
+          slo: "cost_per_idea"
+        annotations:
+          summary: "Cost per idea exceeds SLO target"
+          description: "Cost per idea is ${{ $value }}, exceeding $2.00 target"
+          cost_impact: "high"
+
+  # ==========================================================================
+  # Error Budget Alerts
+  # ==========================================================================
+  - name: slo.error_budgets
+    interval: 300s  # Check every 5 minutes
+    rules:
+      - alert: ErrorBudgetExhausted
+        expr: |
+          (
+            1 - (
+              sum(rate(http_requests_total{code!~"5.."}[30d])) /
+              sum(rate(http_requests_total[30d]))
+            )
+          ) > (1 - 0.999)
+        for: 0s  # Alert immediately
+        labels:
+          severity: critical
+          team: sre
+          category: error_budget
+          slo: "api_availability"
+        annotations:
+          summary: "API availability error budget exhausted"
+          description: "30-day error budget for API availability (99.9% SLO) has been exhausted"
+          action_required: "immediate"
+          
+      - alert: ErrorBudgetCriticallyLow
+        expr: |
+          (
+            (1 - 0.999) - (
+              1 - (
+                sum(rate(http_requests_total{code!~"5.."}[30d])) /
+                sum(rate(http_requests_total[30d]))
+              )
+            )
+          ) / (1 - 0.999) < 0.10
+        for: 0s
+        labels:
+          severity: warning
+          team: sre
+          category: error_budget
+          slo: "api_availability"
+        annotations:
+          summary: "API availability error budget critically low"
+          description: "Only {{ $value | humanizePercentage }} of 30-day error budget remaining"
+          
+      - alert: AIAgentErrorBudgetLow
+        expr: |
+          (
+            0.05 - (
+              1 - (
+                sum(rate(ai_agent_operations_total{status="success"}[24h])) /
+                sum(rate(ai_agent_operations_total[24h]))
+              )
+            )
+          ) / 0.05 < 0.25
+        for: 0s
+        labels:
+          severity: warning
+          team: ai-ml
+          category: error_budget
+          slo: "ai_agent_success"
+        annotations:
+          summary: "AI Agent error budget low"
+          description: "AI Agent 24-hour error budget is at {{ $value | humanizePercentage }}"
+
+  # ==========================================================================
+  # Multi-Burn Rate Alerts (Advanced SLO Alerting)
+  # ==========================================================================
+  - name: slo.multi_burn_rate
+    interval: 30s
+    rules:
+      # Fast burn rate (2% of budget in 1 hour)
+      - alert: APIAvailabilityFastBurn
+        expr: |
+          (
+            sum(rate(http_requests_total{code=~"5.."}[1m])) /
+            sum(rate(http_requests_total[1m]))
+          ) > (14.4 * (1 - 0.999))
+          and
+          (
+            sum(rate(http_requests_total{code=~"5.."}[5m])) /
+            sum(rate(http_requests_total[5m]))
+          ) > (14.4 * (1 - 0.999))
+        for: 2m
+        labels:
+          severity: critical
+          team: sre
+          category: burn_rate
+          slo: "api_availability"
+          burn_rate: "fast"
+        annotations:
+          summary: "Fast burn rate detected for API availability"
+          description: "Current error rate will exhaust 2% of monthly error budget in 1 hour"
+          
+      # Slow burn rate (10% of budget in 6 hours)
+      - alert: APIAvailabilitySlowBurn
+        expr: |
+          (
+            sum(rate(http_requests_total{code=~"5.."}[1h])) /
+            sum(rate(http_requests_total[1h]))
+          ) > (6 * (1 - 0.999))
+          and
+          (
+            sum(rate(http_requests_total{code=~"5.."}[6h])) /
+            sum(rate(http_requests_total[6h]))
+          ) > (6 * (1 - 0.999))
+        for: 15m
+        labels:
+          severity: warning
+          team: sre
+          category: burn_rate
+          slo: "api_availability"
+          burn_rate: "slow"
+        annotations:
+          summary: "Slow burn rate detected for API availability"
+          description: "Current error rate will exhaust 10% of monthly error budget in 6 hours"

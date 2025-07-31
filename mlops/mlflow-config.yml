@@ -1,0 +1,80 @@
+# MLflow Configuration for Agentic Startup Studio
+# Provides experiment tracking, model versioning, and deployment management
+
+version: '3.8'
+
+services:
+  # MLflow Tracking Server
+  mlflow-server:
+    image: python:3.11-slim
+    container_name: mlflow-server
+    ports:
+      - "5000:5000"
+    environment:
+      - MLFLOW_BACKEND_STORE_URI=postgresql://mlflow:${MLFLOW_DB_PASSWORD}@postgres:5432/mlflow_db
+      - MLFLOW_DEFAULT_ARTIFACT_ROOT=s3://terragon-mlflow-artifacts
+      - AWS_ACCESS_KEY_ID=${AWS_ACCESS_KEY_ID}
+      - AWS_SECRET_ACCESS_KEY=${AWS_SECRET_ACCESS_KEY}
+      - AWS_DEFAULT_REGION=${AWS_DEFAULT_REGION:-us-east-1}
+    command: >
+      bash -c "
+        pip install mlflow[extras] psycopg2-binary boto3 &&
+        mlflow server 
+          --backend-store-uri postgresql://mlflow:${MLFLOW_DB_PASSWORD}@postgres:5432/mlflow_db
+          --default-artifact-root s3://terragon-mlflow-artifacts
+          --host 0.0.0.0
+          --port 5000
+          --serve-artifacts
+      "
+    depends_on:
+      - postgres-mlflow
+    networks:
+      - mlflow-network
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.mlflow.rule=Host(`mlflow.localhost`)"
+      - "traefik.http.services.mlflow.loadbalancer.server.port=5000"
+
+  # PostgreSQL for MLflow metadata
+  postgres-mlflow:
+    image: postgres:15-alpine
+    container_name: postgres-mlflow
+    environment:
+      - POSTGRES_DB=mlflow_db
+      - POSTGRES_USER=mlflow
+      - POSTGRES_PASSWORD=${MLFLOW_DB_PASSWORD}
+    volumes:
+      - mlflow_postgres_data:/var/lib/postgresql/data
+    networks:
+      - mlflow-network
+    restart: unless-stopped
+
+  # Model Registry Web UI (optional)
+  mlflow-ui:
+    image: python:3.11-slim
+    container_name: mlflow-ui
+    ports:
+      - "5001:5001"
+    environment:
+      - MLFLOW_TRACKING_URI=http://mlflow-server:5000
+    command: >
+      bash -c "
+        pip install mlflow[extras] streamlit &&
+        streamlit run --server.port 5001 /app/model_registry_ui.py
+      "
+    volumes:
+      - ./model_registry_ui.py:/app/model_registry_ui.py
+    depends_on:
+      - mlflow-server
+    networks:
+      - mlflow-network
+    restart: unless-stopped
+
+volumes:
+  mlflow_postgres_data:
+    driver: local
+
+networks:
+  mlflow-network:
+    driver: bridge

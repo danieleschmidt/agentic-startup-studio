@@ -1,0 +1,168 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: agentic-startup-studio
+  namespace: agentic-startup-studio
+  labels:
+    app.kubernetes.io/name: agentic-startup-studio
+    app.kubernetes.io/component: serviceaccount
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  namespace: agentic-startup-studio
+  name: agentic-startup-studio-role
+  labels:
+    app.kubernetes.io/name: agentic-startup-studio
+    app.kubernetes.io/component: rbac
+rules:
+# Allow reading configuration
+- apiGroups: [""]
+  resources: ["configmaps", "secrets"]
+  verbs: ["get", "list", "watch"]
+# Allow reading pod information for tracing
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+# Allow updating pod annotations for deployment tracking
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["patch"]
+  resourceNames: [] # Can update any pod in the namespace
+# Allow creating events for monitoring
+- apiGroups: [""]
+  resources: ["events"]
+  verbs: ["create", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: agentic-startup-studio-rolebinding
+  namespace: agentic-startup-studio
+  labels:
+    app.kubernetes.io/name: agentic-startup-studio
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: agentic-startup-studio
+  namespace: agentic-startup-studio
+roleRef:
+  kind: Role
+  name: agentic-startup-studio-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Monitoring ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: monitoring
+  namespace: agentic-startup-studio-monitoring
+  labels:
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/component: serviceaccount
+automountServiceAccountToken: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: monitoring-cluster-role
+  labels:
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/component: rbac
+rules:
+# Prometheus needs to scrape metrics from all pods
+- apiGroups: [""]
+  resources: ["nodes", "nodes/proxy", "services", "endpoints", "pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["extensions", "networking.k8s.io"]
+  resources: ["ingresses"]
+  verbs: ["get", "list", "watch"]
+# Access to metrics APIs
+- nonResourceURLs: ["/metrics"]
+  verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: monitoring-cluster-rolebinding
+  labels:
+    app.kubernetes.io/name: monitoring
+    app.kubernetes.io/component: rbac
+subjects:
+- kind: ServiceAccount
+  name: monitoring
+  namespace: agentic-startup-studio-monitoring
+roleRef:
+  kind: ClusterRole
+  name: monitoring-cluster-role
+  apiGroup: rbac.authorization.k8s.io
+---
+# Pod Security Policy (if PSP is enabled)
+apiVersion: policy/v1beta1
+kind: PodSecurityPolicy
+metadata:
+  name: agentic-startup-studio-psp
+  labels:
+    app.kubernetes.io/name: agentic-startup-studio
+    app.kubernetes.io/component: security
+spec:
+  privileged: false
+  allowPrivilegeEscalation: false
+  requiredDropCapabilities:
+    - ALL
+  volumes:
+    - 'configMap'
+    - 'emptyDir'
+    - 'projected'
+    - 'secret'
+    - 'downwardAPI'
+    - 'persistentVolumeClaim'
+  hostNetwork: false
+  hostIPC: false
+  hostPID: false
+  runAsUser:
+    rule: 'MustRunAsNonRoot'
+  supplementalGroups:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  fsGroup:
+    rule: 'MustRunAs'
+    ranges:
+      - min: 1
+        max: 65535
+  readOnlyRootFilesystem: true
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: psp-user
+  namespace: agentic-startup-studio
+  labels:
+    app.kubernetes.io/name: agentic-startup-studio
+    app.kubernetes.io/component: security
+rules:
+- apiGroups: ['policy']
+  resources: ['podsecuritypolicies']
+  verbs: ['use']
+  resourceNames:
+  - agentic-startup-studio-psp
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: psp-user-binding
+  namespace: agentic-startup-studio
+  labels:
+    app.kubernetes.io/name: agentic-startup-studio
+    app.kubernetes.io/component: security
+roleRef:
+  kind: Role
+  name: psp-user
+  apiGroup: rbac.authorization.k8s.io
+subjects:
+- kind: ServiceAccount
+  name: agentic-startup-studio
+  namespace: agentic-startup-studio

@@ -1,0 +1,169 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "agentic-startup-studio.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "agentic-startup-studio.labels" . | nindent 4 }}
+    app.kubernetes.io/component: api
+  {{- with .Values.podAnnotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  {{- if not .Values.autoscaling.enabled }}
+  replicas: {{ .Values.app.replicaCount }}
+  {{- end }}
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxUnavailable: 1
+      maxSurge: 1
+  selector:
+    matchLabels:
+      {{- include "agentic-startup-studio.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  template:
+    metadata:
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: {{ .Values.app.ports.metrics | quote }}
+        prometheus.io/path: "/metrics"
+        config/checksum: {{ include (print $.Template.BasePath "/configmap.yaml") . | sha256sum }}
+        {{- with .Values.podAnnotations }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      labels:
+        {{- include "agentic-startup-studio.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: api
+        app.kubernetes.io/version: {{ .Values.app.version | quote }}
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "agentic-startup-studio.serviceAccountName" . }}
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+      - name: {{ .Chart.Name }}
+        securityContext:
+          {{- toYaml .Values.securityContext | nindent 12 }}
+        image: "{{ .Values.app.image.repository }}:{{ .Values.app.image.tag | default .Values.global.imageTag }}"
+        imagePullPolicy: {{ .Values.app.image.pullPolicy | default .Values.global.imagePullPolicy }}
+        ports:
+        - name: http
+          containerPort: {{ .Values.app.ports.http }}
+          protocol: TCP
+        - name: metrics
+          containerPort: {{ .Values.app.ports.metrics }}
+          protocol: TCP
+        env:
+        # Configuration from ConfigMap
+        {{- range $key, $value := .Values.app.env }}
+        - name: {{ $key }}
+          valueFrom:
+            configMapKeyRef:
+              name: {{ include "agentic-startup-studio.fullname" $ }}-config
+              key: {{ $key }}
+        {{- end }}
+        # Secrets
+        {{- if .Values.app.secrets.openai_api_key }}
+        - name: OPENAI_API_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "agentic-startup-studio.fullname" . }}-secrets
+              key: openai_api_key
+        {{- end }}
+        {{- if .Values.app.secrets.jwt_secret_key }}
+        - name: JWT_SECRET_KEY
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "agentic-startup-studio.fullname" . }}-secrets
+              key: jwt_secret_key
+        {{- end }}
+        # Database connection
+        {{- if .Values.postgresql.enabled }}
+        - name: DATABASE_URL
+          value: "postgresql://{{ .Values.postgresql.auth.username }}:$(POSTGRES_PASSWORD)@{{ include "agentic-startup-studio.fullname" . }}-postgresql:5432/{{ .Values.postgresql.auth.database }}"
+        - name: POSTGRES_PASSWORD
+          valueFrom:
+            secretKeyRef:
+              name: {{ include "agentic-startup-studio.fullname" . }}-postgresql
+              key: password
+        {{- end }}
+        # Redis connection
+        {{- if .Values.redis.enabled }}
+        - name: REDIS_URL
+          value: "redis://{{ include "agentic-startup-studio.fullname" . }}-redis-master:6379"
+        {{- end }}
+        # Pod metadata
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        - name: POD_NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
+        - name: NODE_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: spec.nodeName
+        # OpenTelemetry configuration
+        - name: OTEL_SERVICE_NAME
+          value: {{ include "agentic-startup-studio.fullname" . }}
+        - name: OTEL_SERVICE_VERSION
+          value: {{ .Values.app.version | quote }}
+        - name: OTEL_RESOURCE_ATTRIBUTES
+          value: "service.name={{ include "agentic-startup-studio.fullname" . }},service.version={{ .Values.app.version }},deployment.environment={{ .Values.global.environment }}"
+        {{- if .Values.monitoring.jaeger.enabled }}
+        - name: OTEL_EXPORTER_OTLP_TRACES_ENDPOINT
+          value: "http://{{ include "agentic-startup-studio.fullname" . }}-jaeger-collector:4317"
+        {{- end }}
+        livenessProbe:
+          {{- toYaml .Values.app.livenessProbe | nindent 12 }}
+        readinessProbe:
+          {{- toYaml .Values.app.readinessProbe | nindent 12 }}
+        startupProbe:
+          {{- toYaml .Values.app.startupProbe | nindent 12 }}
+        resources:
+          {{- toYaml .Values.app.resources | nindent 12 }}
+        volumeMounts:
+        - name: tmp
+          mountPath: /tmp
+        - name: cache
+          mountPath: /app/cache
+        {{- with .Values.extraVolumeMounts }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- with .Values.initContainers }}
+      initContainers:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.sidecars }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+      volumes:
+      - name: tmp
+        emptyDir: {}
+      - name: cache
+        emptyDir:
+          sizeLimit: 1Gi
+      {{- with .Values.extraVolumes }}
+      {{- toYaml . | nindent 6 }}
+      {{- end }}
+      {{- with .Values.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      terminationGracePeriodSeconds: 30
+      restartPolicy: Always

@@ -1,0 +1,44 @@
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: agentic-startup-studio-pdb
+  namespace: agentic-startup-studio
+  labels:
+    app.kubernetes.io/name: agentic-startup-studio
+    app.kubernetes.io/component: availability
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: agentic-startup-studio
+      app.kubernetes.io/component: api
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: ai-agent-worker-pdb
+  namespace: agentic-startup-studio
+  labels:
+    app.kubernetes.io/name: ai-agent-worker
+    app.kubernetes.io/component: availability
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ai-agent-worker
+      app.kubernetes.io/component: worker
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: postgresql-pdb
+  namespace: agentic-startup-studio
+  labels:
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/component: availability
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: postgresql
+      app.kubernetes.io/component: database

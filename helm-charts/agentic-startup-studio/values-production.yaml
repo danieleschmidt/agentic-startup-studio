@@ -1,0 +1,544 @@
+# Production values for agentic-startup-studio
+
+# Global configuration for production
+global:
+  environment: production
+  imageTag: "1.0.0"
+  imagePullPolicy: IfNotPresent
+  storageClass: "gp3"
+  
+  # Security configuration
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 65534
+    fsGroup: 65534
+
+# Application configuration for production
+app:
+  replicaCount: 5  # Higher replica count for production
+  
+  # Production resource limits
+  resources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+  
+  # Production environment variables
+  env:
+    LOG_LEVEL: "INFO"
+    MAX_CONCURRENT_AGENTS: "10"
+    TOKEN_BUDGET_LIMIT: "500000"
+    
+    # Enhanced security and performance
+    ENABLE_RATE_LIMITING: "true"
+    ENABLE_CORS_PROTECTION: "true"
+    ENABLE_REQUEST_VALIDATION: "true"
+    ENABLE_RESPONSE_COMPRESSION: "true"
+    
+    # Production-specific features
+    ENABLE_CACHING: "true"
+    CACHE_TTL: "3600"
+    ENABLE_BATCH_PROCESSING: "true"
+    BATCH_SIZE: "100"
+  
+  # Production secrets (these should be managed by external secret management)
+  secrets:
+    openai_api_key: "${OPENAI_API_KEY_PROD}"
+    anthropic_api_key: "${ANTHROPIC_API_KEY_PROD}"
+    jwt_secret_key: "${JWT_SECRET_KEY_PROD}"
+    encryption_key: "${ENCRYPTION_KEY_PROD}"
+    github_token: "${GITHUB_TOKEN_PROD}"
+  
+  # Stricter health checks for production
+  livenessProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 60
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+  
+  readinessProbe:
+    httpGet:
+      path: /ready
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 5
+    timeoutSeconds: 3
+    failureThreshold: 3
+  
+  startupProbe:
+    httpGet:
+      path: /health
+      port: http
+    initialDelaySeconds: 30
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 60  # Longer startup time allowed
+
+# AI Agent Worker configuration for production
+aiAgentWorker:
+  enabled: true
+  replicaCount: 8  # More workers for production load
+  
+  # Production worker resources
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "8Gi"
+      cpu: "4000m"
+  
+  env:
+    MAX_CONCURRENT_AGENTS: "5"
+    WORKER_TIMEOUT: "1800"  # 30 minutes timeout
+    ENABLE_WORKER_METRICS: "true"
+
+# Production ingress configuration
+ingress:
+  enabled: true
+  className: "nginx"
+  
+  annotations:
+    # Production security headers
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+    nginx.ingress.kubernetes.io/force-ssl-redirect: "true"
+    
+    # Rate limiting for production
+    nginx.ingress.kubernetes.io/rate-limit: "200"
+    nginx.ingress.kubernetes.io/rate-limit-window: "1m"
+    nginx.ingress.kubernetes.io/rate-limit-burst-multiplier: "5"
+    
+    # Enhanced security
+    nginx.ingress.kubernetes.io/server-snippet: |
+      add_header Strict-Transport-Security "max-age=31536000; includeSubDomains" always;
+      add_header X-Frame-Options "SAMEORIGIN" always;
+      add_header X-Content-Type-Options "nosniff" always;
+      add_header X-XSS-Protection "1; mode=block" always;
+      add_header Referrer-Policy "strict-origin-when-cross-origin" always;
+    
+    # Load balancer configuration
+    nginx.ingress.kubernetes.io/proxy-body-size: "100m"
+    nginx.ingress.kubernetes.io/proxy-connect-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-send-timeout: "300"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "300"
+    
+    # TLS configuration
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+    
+    # WAF and DDoS protection
+    nginx.ingress.kubernetes.io/whitelist-source-range: "0.0.0.0/0"  # Configure as needed
+  
+  hosts:
+    - host: api.terragon.ai
+      paths:
+        - path: /
+          pathType: Prefix
+          backend:
+            service:
+              name: agentic-startup-studio
+              port:
+                number: 80
+  
+  tls:
+    - hosts:
+        - api.terragon.ai
+      secretName: agentic-startup-studio-prod-tls
+
+# Production autoscaling
+autoscaling:
+  enabled: true
+  minReplicas: 5
+  maxReplicas: 50
+  targetCPUUtilizationPercentage: 60  # More conservative for production
+  targetMemoryUtilizationPercentage: 70
+  
+  # Production scaling behavior - more conservative
+  behavior:
+    scaleDown:
+      stabilizationWindowSeconds: 600  # 10 minutes
+      policies:
+        - type: Percent
+          value: 10
+          periodSeconds: 300  # 5 minutes
+        - type: Pods
+          value: 2
+          periodSeconds: 300
+      selectPolicy: Min
+    scaleUp:
+      stabilizationWindowSeconds: 120  # 2 minutes
+      policies:
+        - type: Percent
+          value: 25
+          periodSeconds: 60
+        - type: Pods
+          value: 5
+          periodSeconds: 60
+      selectPolicy: Max
+
+# AI Agent Worker autoscaling for production
+aiAgentWorkerAutoscaling:
+  enabled: true
+  minReplicas: 8
+  maxReplicas: 25
+  targetCPUUtilizationPercentage: 65
+  targetMemoryUtilizationPercentage: 75
+
+# Enhanced Pod Disruption Budget for production
+podDisruptionBudget:
+  enabled: true
+  apiMinAvailable: 3  # Ensure high availability
+  workerMinAvailable: 2
+
+# Production PostgreSQL configuration
+postgresql:
+  enabled: true
+  auth:
+    enablePostgresUser: true
+    postgresPassword: "${POSTGRES_ADMIN_PASSWORD_PROD}"
+    username: "startup_studio"
+    password: "${POSTGRES_APP_PASSWORD_PROD}"
+    database: "startup_studio"
+  
+  architecture: standalone  # Use replication for true production
+  
+  primary:
+    # Production-grade PostgreSQL configuration
+    extendedConfiguration: |
+      # Connection settings
+      max_connections = 500
+      
+      # Memory settings
+      shared_buffers = 4GB
+      effective_cache_size = 12GB
+      maintenance_work_mem = 1GB
+      work_mem = 64MB
+      
+      # WAL settings
+      wal_buffers = 64MB
+      min_wal_size = 2GB
+      max_wal_size = 8GB
+      checkpoint_completion_target = 0.9
+      
+      # Query planner
+      default_statistics_target = 500
+      random_page_cost = 1.1
+      effective_io_concurrency = 200
+      
+      # Parallel query settings
+      max_worker_processes = 16
+      max_parallel_workers_per_gather = 8
+      max_parallel_workers = 16
+      max_parallel_maintenance_workers = 8
+      
+      # Logging for production
+      log_destination = 'stderr'
+      logging_collector = on
+      log_min_duration_statement = 500
+      log_checkpoints = on
+      log_connections = on
+      log_disconnections = on
+      log_lock_waits = on
+      log_temp_files = 0
+      
+      # Extensions for AI/ML
+      shared_preload_libraries = 'pg_stat_statements,vector,pg_cron'
+    
+    resources:
+      requests:
+        memory: "8Gi"
+        cpu: "2000m"
+      limits:
+        memory: "16Gi"
+        cpu: "4000m"
+    
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 500Gi  # Large storage for production
+    
+    # Backup configuration
+    backup:
+      enabled: true
+      schedule: "0 2 * * *"  # Daily at 2 AM
+      retention: "30d"
+  
+  metrics:
+    enabled: true
+    resources:
+      requests:
+        memory: "256Mi"
+        cpu: "200m"
+      limits:
+        memory: "512Mi"
+        cpu: "500m"
+
+# Production Redis configuration
+redis:
+  enabled: true
+  architecture: standalone  # Use cluster mode for true production
+  
+  auth:
+    enabled: true
+    password: "${REDIS_PASSWORD_PROD}"
+  
+  master:
+    configuration: |
+      # Memory management for production
+      maxmemory 8gb
+      maxmemory-policy allkeys-lru
+      
+      # Persistence for production
+      save 900 1
+      save 300 10
+      save 60 10000
+      stop-writes-on-bgsave-error yes
+      rdbcompression yes
+      rdbchecksum yes
+      
+      # Network settings
+      timeout 300
+      tcp-keepalive 300
+      
+      # Logging
+      loglevel notice
+      syslog-enabled no
+      
+      # AOF persistence
+      appendonly yes
+      appendfilename "appendonly.aof"
+      appendfsync everysec
+      no-appendfsync-on-rewrite no
+      auto-aof-rewrite-percentage 100
+      auto-aof-rewrite-min-size 256mb
+      
+      # Security
+      requirepass ${REDIS_PASSWORD_PROD}
+      
+      # Performance tuning
+      tcp-keepalive 300
+      timeout 0
+      tcp-backlog 511
+    
+    resources:
+      requests:
+        memory: "4Gi"
+        cpu: "1000m"
+      limits:
+        memory: "8Gi"
+        cpu: "2000m"
+    
+    persistence:
+      enabled: true
+      storageClass: "gp3"
+      size: 100Gi
+
+# Production monitoring configuration
+monitoring:
+  prometheus:
+    enabled: true
+    server:
+      persistentVolume:
+        enabled: true
+        size: 200Gi
+        storageClass: "gp3"
+      
+      # Production retention and storage
+      retention: "30d"
+      
+      resources:
+        requests:
+          memory: "8Gi"
+          cpu: "2000m"
+        limits:
+          memory: "16Gi"
+          cpu: "4000m"
+      
+      # Production alerting configuration
+      extraArgs:
+        storage.tsdb.retention.time: "30d"
+        storage.tsdb.retention.size: "180GB"
+        web.enable-lifecycle: true
+        web.enable-admin-api: true
+    
+    # Production alert rules
+    serverFiles:
+      alerting_rules.yml:
+        groups:
+          - name: production-critical
+            rules:
+              - alert: APIDown
+                expr: up{job="agentic-startup-studio"} == 0
+                for: 30s
+                labels:
+                  severity: critical
+                  team: sre
+                annotations:
+                  summary: "Production API is down"
+                  description: "The production API has been down for more than 30 seconds"
+                  runbook_url: "https://docs.terragon.ai/runbooks/api-down"
+              
+              - alert: HighErrorRate
+                expr: (rate(http_requests_total{status=~"5.."}[5m]) / rate(http_requests_total[5m])) * 100 > 1
+                for: 1m
+                labels:
+                  severity: critical
+                  team: sre
+                annotations:
+                  summary: "High error rate in production"
+                  description: "Error rate is {{ $value }}% for the last 1 minute"
+              
+              - alert: HighLatency
+                expr: histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m])) > 1
+                for: 2m
+                labels:
+                  severity: warning
+                  team: engineering
+                annotations:
+                  summary: "High latency in production"
+                  description: "95th percentile latency is {{ $value }}s"
+  
+  grafana:
+    enabled: true
+    adminPassword: "${GRAFANA_ADMIN_PASSWORD_PROD}"
+    
+    persistence:
+      enabled: true
+      size: 50Gi
+      storageClass: "gp3"
+    
+    resources:
+      requests:
+        memory: "1Gi"
+        cpu: "500m"
+      limits:
+        memory: "2Gi"
+        cpu: "1000m"
+    
+    # Production Grafana configuration
+    grafana.ini:
+      server:
+        root_url: "https://monitoring.terragon.ai/grafana"
+        serve_from_sub_path: true
+      
+      security:
+        admin_user: admin
+        admin_password: "${GRAFANA_ADMIN_PASSWORD_PROD}"
+        secret_key: "${GRAFANA_SECRET_KEY_PROD}"
+      
+      auth:
+        disable_login_form: false
+        oauth_auto_login: false
+      
+      alerting:
+        enabled: true
+        execute_alerts: true
+      
+      smtp:
+        enabled: true
+        host: "${SMTP_HOST}:587"
+        user: "${SMTP_USER}"
+        password: "${SMTP_PASSWORD}"
+        from_address: "monitoring@terragon.ai"
+        from_name: "Terragon Monitoring"
+  
+  jaeger:
+    enabled: true
+    storage:
+      type: elasticsearch  # Use persistent storage for production
+      elasticsearch:
+        host: "${ELASTICSEARCH_HOST}"
+        port: 9200
+    
+    collector:
+      resources:
+        requests:
+          memory: "1Gi"
+          cpu: "500m"
+        limits:
+          memory: "2Gi"
+          cpu: "1000m"
+      
+      # Production sampling configuration
+      sampling:
+        strategies: |
+          {
+            "service_strategies": [
+              {
+                "service": "agentic-startup-studio",
+                "type": "probabilistic",
+                "param": 0.1
+              }
+            ],
+            "default_strategy": {
+              "type": "probabilistic",
+              "param": 0.01
+            }
+          }
+
+# Production network policy - more restrictive
+networkPolicy:
+  enabled: true
+  policyTypes:
+    - Ingress
+    - Egress
+  
+  # Restrictive ingress rules for production
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: ingress-nginx
+      ports:
+        - protocol: TCP
+          port: 8080
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: monitoring
+      ports:
+        - protocol: TCP
+          port: 8090
+  
+  # Controlled egress for production
+  egress:
+    # DNS resolution
+    - to: []
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+    # HTTPS to external APIs only
+    - to: []
+      ports:
+        - protocol: TCP
+          port: 443
+
+# Production node affinity and tolerations
+nodeSelector:
+  node-type: "application"
+
+affinity:
+  podAntiAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+    - weight: 100
+      podAffinityTerm:
+        labelSelector:
+          matchExpressions:
+          - key: app.kubernetes.io/name
+            operator: In
+            values:
+            - agentic-startup-studio
+        topologyKey: kubernetes.io/hostname
+
+tolerations:
+  - key: "application-workload"
+    operator: "Equal"
+    value: "true"
+    effect: "NoSchedule"

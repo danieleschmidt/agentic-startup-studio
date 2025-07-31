@@ -1,0 +1,149 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+metadata:
+  name: agentic-startup-studio-base
+  annotations:
+    config.kubernetes.io/local-config: "true"
+
+# Common labels applied to all resources
+commonLabels:
+  app.kubernetes.io/name: agentic-startup-studio
+  app.kubernetes.io/part-of: terragon-platform
+  app.kubernetes.io/managed-by: kustomize
+
+# Resources to include
+resources:
+  - namespace.yaml
+  - rbac.yaml
+  - configmap.yaml
+  - secret.yaml
+  - deployment.yaml
+  - statefulset.yaml
+  - service.yaml
+  - ingress.yaml
+  - hpa.yaml
+  - pdb.yaml
+  - networkpolicy.yaml
+
+# Image transformations
+images:
+  - name: terragon/agentic-startup-studio
+    newTag: latest
+
+# ConfigMap generation
+configMapGenerator:
+  - name: postgresql-config
+    literals:
+      - postgresql.conf=|
+          # PostgreSQL configuration for AI/ML workloads
+          shared_preload_libraries = 'pg_stat_statements,vector'
+          max_connections = 200
+          shared_buffers = 1GB
+          effective_cache_size = 3GB
+          maintenance_work_mem = 512MB
+          checkpoint_completion_target = 0.9
+          wal_buffers = 16MB
+          default_statistics_target = 100
+          random_page_cost = 1.1
+          effective_io_concurrency = 200
+          work_mem = 32MB
+          min_wal_size = 1GB
+          max_wal_size = 4GB
+          max_worker_processes = 8
+          max_parallel_workers_per_gather = 4
+          max_parallel_workers = 8
+          max_parallel_maintenance_workers = 4
+          # Logging
+          log_destination = 'stderr'
+          logging_collector = on
+          log_min_duration_statement = 1000
+          log_checkpoints = on
+          log_connections = on
+          log_disconnections = on
+          log_lock_waits = on
+          log_temp_files = 0
+          log_autovacuum_min_duration = 0
+          log_error_verbosity = default
+
+  - name: postgresql-init
+    literals:
+      - 01-extensions.sql=|
+          -- Create extensions for AI/ML workloads
+          CREATE EXTENSION IF NOT EXISTS vector;
+          CREATE EXTENSION IF NOT EXISTS pg_stat_statements;
+          CREATE EXTENSION IF NOT EXISTS btree_gin;
+          -- Create application schema
+          CREATE SCHEMA IF NOT EXISTS app;
+          -- Grant permissions
+          GRANT ALL ON SCHEMA app TO postgres;
+          GRANT USAGE ON SCHEMA app TO PUBLIC;
+
+  - name: redis-config
+    literals:
+      - redis.conf=|
+          # Redis configuration for AI/ML caching
+          maxmemory 1gb
+          maxmemory-policy allkeys-lru
+          save 900 1
+          save 300 10
+          save 60 10000
+          stop-writes-on-bgsave-error yes
+          rdbcompression yes
+          rdbchecksum yes
+          # Network
+          timeout 300
+          tcp-keepalive 300
+          # Logging
+          loglevel notice
+          syslog-enabled no
+          # Persistence
+          appendonly yes
+          appendfilename "appendonly.aof"
+          appendfsync everysec
+          no-appendfsync-on-rewrite no
+          auto-aof-rewrite-percentage 100
+          auto-aof-rewrite-min-size 64mb
+
+# Secret generation (placeholders - real secrets should come from external secret management)
+secretGenerator:
+  - name: monitoring-basic-auth
+    type: Opaque
+    literals:
+      - auth=admin:$2a$10$example.hash.for.basic.auth
+
+# Namespace configuration
+namespace: agentic-startup-studio
+
+# Resource name prefix
+namePrefix: ""
+
+# Resource name suffix  
+nameSuffix: ""
+
+# Patches for common configurations
+patches:
+  # Add common annotations to all resources
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+    patch: |-
+      - op: add
+        path: /metadata/annotations/deployment.kubernetes.io~1revision
+        value: "1"
+      - op: add
+        path: /spec/template/metadata/annotations/kubectl.kubernetes.io~1restartedAt
+        value: "$(date -u +'%Y-%m-%dT%H:%M:%SZ')"
+
+# Replicas for different environments (overridden in overlays)
+replicas:
+  - name: agentic-startup-studio
+    count: 3
+  - name: ai-agent-worker
+    count: 2
+
+# Validate configurations
+validators:
+  - resource_quota.yaml
+  - limit_range.yaml
