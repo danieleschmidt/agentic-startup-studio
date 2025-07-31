@@ -1,0 +1,45 @@
+# Jaeger All-in-One Configuration for Development
+# Production environments should use separate collector, query, and agent components
+
+version: '3.8'
+
+services:
+  jaeger:
+    image: jaegertracing/all-in-one:1.52
+    container_name: jaeger
+    environment:
+      # Memory storage settings
+      - SPAN_STORAGE_TYPE=memory
+      - MEMORY_MAX_TRACES=50000
+      
+      # Query settings
+      - QUERY_BASE_PATH=/jaeger
+      - JAEGER_DISABLED=false
+      
+      # Collector settings
+      - COLLECTOR_ZIPKIN_HOST_PORT=:9411
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      # Jaeger UI
+      - "16686:16686"
+      # Accept jaeger.thrift over HTTP
+      - "14268:14268"
+      # Accept jaeger.thrift over gRPC
+      - "14250:14250"
+      # Accept zipkin.thrift over compact thrift protocol
+      - "9411:9411"
+      # OTLP gRPC receiver
+      - "4317:4317"
+      # OTLP HTTP receiver
+      - "4318:4318"
+    networks:
+      - monitoring
+    restart: unless-stopped
+    labels:
+      - "traefik.enable=true"
+      - "traefik.http.routers.jaeger.rule=Host(`jaeger.localhost`)"
+      - "traefik.http.services.jaeger.loadbalancer.server.port=16686"
+
+networks:
+  monitoring:
+    external: true

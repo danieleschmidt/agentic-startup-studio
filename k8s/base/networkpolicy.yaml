@@ -1,0 +1,235 @@
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: agentic-startup-studio-netpol
+  namespace: agentic-startup-studio
+  labels:
+    app.kubernetes.io/name: agentic-startup-studio
+    app.kubernetes.io/component: security
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: agentic-startup-studio
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from nginx ingress controller
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: ingress-nginx
+    ports:
+    - protocol: TCP
+      port: 8080
+  # Allow ingress from monitoring
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: agentic-startup-studio-monitoring
+    ports:
+    - protocol: TCP
+      port: 8090
+  egress:
+  # Allow egress to DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow egress to database
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgresql
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow egress to Redis
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow egress to external APIs (AI services)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+  # Allow egress to monitoring
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: agentic-startup-studio-monitoring
+    ports:
+    - protocol: TCP
+      port: 4317  # OTLP gRPC
+    - protocol: TCP
+      port: 4318  # OTLP HTTP
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: ai-agent-worker-netpol
+  namespace: agentic-startup-studio
+  labels:
+    app.kubernetes.io/name: ai-agent-worker
+    app.kubernetes.io/component: security
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: ai-agent-worker
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from monitoring for metrics
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: agentic-startup-studio-monitoring
+    ports:
+    - protocol: TCP
+      port: 8090
+  egress:
+  # Allow egress to DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+  # Allow egress to database
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: postgresql
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow egress to Redis
+  - to:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: redis
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow egress to external APIs (AI services)
+  - to: []
+    ports:
+    - protocol: TCP
+      port: 443
+    - protocol: TCP
+      port: 80
+  # Allow egress to monitoring
+  - to:
+    - namespaceSelector:
+        matchLabels:
+          name: agentic-startup-studio-monitoring
+    ports:
+    - protocol: TCP
+      port: 4317  # OTLP gRPC
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: postgresql-netpol
+  namespace: agentic-startup-studio
+  labels:
+    app.kubernetes.io/name: postgresql
+    app.kubernetes.io/component: security
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: postgresql
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from API pods
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: agentic-startup-studio
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow ingress from worker pods
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: ai-agent-worker
+    ports:
+    - protocol: TCP
+      port: 5432
+  # Allow ingress from monitoring for metrics
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: agentic-startup-studio-monitoring
+    ports:
+    - protocol: TCP
+      port: 9187
+  egress:
+  # Allow egress to DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: redis-netpol
+  namespace: agentic-startup-studio
+  labels:
+    app.kubernetes.io/name: redis
+    app.kubernetes.io/component: security
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: redis
+  policyTypes:
+  - Ingress
+  - Egress
+  ingress:
+  # Allow ingress from API pods
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: agentic-startup-studio
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow ingress from worker pods
+  - from:
+    - podSelector:
+        matchLabels:
+          app.kubernetes.io/name: ai-agent-worker
+    ports:
+    - protocol: TCP
+      port: 6379
+  # Allow ingress from monitoring for metrics
+  - from:
+    - namespaceSelector:
+        matchLabels:
+          name: agentic-startup-studio-monitoring
+    ports:
+    - protocol: TCP
+      port: 9121
+  egress:
+  # Allow egress to DNS
+  - to: []
+    ports:
+    - protocol: UDP
+      port: 53
+    - protocol: TCP
+      port: 53
