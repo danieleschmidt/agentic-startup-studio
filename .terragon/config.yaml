@@ -1,0 +1,106 @@
+# Terragon Autonomous SDLC Configuration
+# Repository: agentic-startup-studio (Advanced Maturity - 85%+)
+
+scoring:
+  # Adaptive weights for advanced repositories
+  weights:
+    advanced:
+      wsjf: 0.5        # Weighted Shortest Job First
+      ice: 0.1         # Impact Confidence Ease  
+      technicalDebt: 0.3  # Technical debt priority
+      security: 0.1    # Security improvements
+  
+  # Enhanced scoring thresholds for advanced repos
+  thresholds:
+    minScore: 15           # Higher threshold for advanced maturity
+    maxRisk: 0.7          # Lower risk tolerance
+    securityBoost: 2.0    # 2x boost for security items
+    complianceBoost: 1.8  # 1.8x boost for compliance
+    performanceBoost: 1.5 # 1.5x boost for performance
+
+discovery:
+  # Multi-source signal harvesting
+  sources:
+    - gitHistory          # Parse commit messages for debt indicators
+    - staticAnalysis      # Code quality and complexity analysis
+    - issueTrackers       # GitHub issues and PRs
+    - vulnerabilityDatabases  # Security vulnerability feeds
+    - performanceMonitoring   # Runtime performance data
+    - dependencyUpdates   # Package update availability
+    - codeComplexity     # Cyclomatic complexity analysis
+    - testCoverage       # Coverage gap identification
+    
+  # Advanced tooling integration
+  tools:
+    staticAnalysis:
+      - ruff             # Already configured
+      - mypy             # Type checking
+      - bandit           # Security analysis
+      - complexity-metrics  # Code complexity
+    security:
+      - dependabot       # Already configured
+      - security-audit   # npm/pip audit
+      - container-scan   # Docker security
+    performance:
+      - py-spy          # Python profiling
+      - memory-profiler # Memory analysis
+      - load-testing    # Performance regression
+
+execution:
+  # Conservative execution for advanced repos
+  maxConcurrentTasks: 1
+  testRequirements:
+    minCoverage: 90        # Match existing standard
+    performanceRegression: 2  # 2% max regression
+    securityCheck: true
+  
+  # Automatic rollback triggers
+  rollbackTriggers:
+    - testFailure
+    - buildFailure  
+    - securityViolation
+    - performanceRegression
+    - coverageDecrease
+
+monitoring:
+  # Comprehensive metrics tracking
+  metrics:
+    - executionSuccess
+    - valueDelivered
+    - technicalDebtReduction
+    - securityImprovements
+    - performanceGains
+    - testCoverageIncrease
+    
+  # Integration with existing observability
+  exporters:
+    - prometheus      # Export to existing Prometheus
+    - grafana         # Dashboard integration
+    - opentelemetry   # Distributed tracing
+
+quality:
+  # Advanced quality gates
+  gates:
+    - typecheck       # mypy validation
+    - securityScan    # bandit + dependency check
+    - performanceTest # Load testing on changes
+    - integrationTest # Full pipeline validation
+    - documentationUpdate  # Keep docs synchronized
+
+# Repository-specific configuration
+repository:
+  maturity: "advanced"
+  primaryLanguage: "python"
+  framework: "fastapi"
+  testFramework: "pytest"
+  architecture: "microservices"
+  deployment: "docker-kubernetes"
+  
+# Business context integration
+business:
+  # Link technical debt to business impact
+  impactMapping:
+    performance: "user_experience"
+    security: "compliance_risk"
+    reliability: "operational_stability"
+    maintainability: "developer_velocity"
