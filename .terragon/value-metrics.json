@@ -1,0 +1,14 @@
+{
+  "execution_history": [],
+  "backlog_metrics": {
+    "total_items": 5,
+    "average_age_days": 0,
+    "debt_ratio": 0.33,
+    "velocity_trend": "discovering",
+    "last_updated": "2025-08-01T11:44:45.661880"
+  },
+  "learning_metrics": {
+    "estimation_accuracy": 0.85,
+    "value_prediction_accuracy": 0.78
+  }
+}
