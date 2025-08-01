@@ -1,0 +1,245 @@
+name: Security Scan
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    # Run security scan daily at 2 AM UTC
+    - cron: '0 2 * * *'
+  workflow_dispatch:
+    inputs:
+      scan_type:
+        description: 'Type of security scan to run'
+        required: true
+        default: 'full'
+        type: choice
+        options:
+          - full
+          - code-only
+          - dependencies-only
+          - container-only
+
+jobs:
+  security-scan:
+    name: Security Analysis
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      security-events: write
+      pull-requests: write
+    
+    strategy:
+      matrix:
+        scan-type: [code, dependencies, secrets, container]
+        
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+        
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+        
+    # Code Security Scanning
+    - name: Run Bandit Security Scan
+      if: matrix.scan-type == 'code'
+      run: |
+        bandit -r pipeline/ core/ scripts/ \
+          -f sarif -o bandit-results.sarif \
+          --severity-level medium
+      continue-on-error: true
+      
+    - name: Upload Bandit Results
+      if: matrix.scan-type == 'code'
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: bandit-results.sarif
+        category: bandit
+        
+    - name: Run Semgrep
+      if: matrix.scan-type == 'code'
+      uses: returntocorp/semgrep-action@v1
+      with:
+        config: auto
+        publishToken: ${{ secrets.SEMGREP_APP_TOKEN }}
+        
+    # Dependency Scanning
+    - name: Run Safety Check
+      if: matrix.scan-type == 'dependencies'
+      run: |
+        safety check --json --output safety-report.json
+        safety check --short-report
+      continue-on-error: true
+      
+    - name: Run pip-audit
+      if: matrix.scan-type == 'dependencies'
+      run: |
+        pip-audit --format=json --output=pip-audit-report.json
+        pip-audit --format=cyclonedx-json --output=sbom.json
+      continue-on-error: true
+      
+    - name: Upload SBOM
+      if: matrix.scan-type == 'dependencies'
+      uses: actions/upload-artifact@v4
+      with:
+        name: sbom
+        path: sbom.json
+        
+    # Secrets Scanning
+    - name: Run TruffleHog
+      if: matrix.scan-type == 'secrets'
+      uses: trufflesecurity/trufflehog@main
+      with:
+        path: ./
+        base: main
+        head: HEAD
+        extra_args: --debug --only-verified
+        
+    - name: Run detect-secrets
+      if: matrix.scan-type == 'secrets'
+      run: |
+        detect-secrets scan --all-files --baseline .secrets.baseline
+        detect-secrets audit .secrets.baseline
+      continue-on-error: true
+      
+    # Container Scanning
+    - name: Build Docker Image
+      if: matrix.scan-type == 'container'
+      run: |
+        docker build -t agentic-startup-studio:scan .
+        
+    - name: Run Trivy Container Scan
+      if: matrix.scan-type == 'container'
+      uses: aquasecurity/trivy-action@master
+      with:
+        image-ref: 'agentic-startup-studio:scan'
+        format: 'sarif'
+        output: 'trivy-results.sarif'
+        severity: 'CRITICAL,HIGH'
+        
+    - name: Upload Trivy Results
+      if: matrix.scan-type == 'container'
+      uses: github/codeql-action/upload-sarif@v2
+      with:
+        sarif_file: 'trivy-results.sarif'
+        category: trivy
+        
+    - name: Run Grype Container Scan
+      if: matrix.scan-type == 'container'
+      uses: anchore/scan-action@v3
+      with:
+        image: 'agentic-startup-studio:scan'
+        severity-cutoff: high
+        output-format: sarif
+        
+    # Generate Security Report
+    - name: Generate Security Summary
+      run: |
+        python scripts/generate-security-report.py \
+          --bandit-results bandit-results.sarif \
+          --safety-results safety-report.json \
+          --pip-audit-results pip-audit-report.json \
+          --trivy-results trivy-results.sarif \
+          --output security-summary.md
+      continue-on-error: true
+      
+    - name: Comment PR with Security Summary
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const path = './security-summary.md';
+          
+          if (fs.existsSync(path)) {
+            const summary = fs.readFileSync(path, 'utf8');
+            
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: `## 🔒 Security Scan Results\n\n${summary}`
+            });
+          }
+          
+    - name: Upload Security Reports
+      uses: actions/upload-artifact@v4
+      with:
+        name: security-reports-${{ matrix.scan-type }}
+        path: |
+          bandit-results.sarif
+          safety-report.json
+          pip-audit-report.json
+          trivy-results.sarif
+          security-summary.md
+        retention-days: 30
+        
+    # Fail job on critical vulnerabilities
+    - name: Check for Critical Vulnerabilities
+      run: |
+        python scripts/check-critical-vulnerabilities.py \
+          --bandit-results bandit-results.sarif \
+          --safety-results safety-report.json \
+          --trivy-results trivy-results.sarif \
+          --fail-on-critical
+          
+  notify-security-team:
+    name: Notify Security Team
+    runs-on: ubuntu-latest
+    needs: security-scan
+    if: failure() && github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Send Slack Notification
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#security-alerts'
+        message: |
+          🚨 Security scan failed on main branch
+          Repository: ${{ github.repository }}
+          Commit: ${{ github.sha }}
+          Author: ${{ github.actor }}
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        
+    - name: Create Security Issue
+      uses: actions/github-script@v7
+      with:
+        script: |
+          github.rest.issues.create({
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            title: `🔒 Security Scan Failed - ${new Date().toISOString().split('T')[0]}`,
+            body: `
+            ## Security Scan Failure
+            
+            **Branch:** ${context.ref}
+            **Commit:** ${context.sha}
+            **Workflow:** ${context.workflow}
+            **Run ID:** ${context.runId}
+            
+            A security scan has failed on the main branch. Please investigate immediately.
+            
+            ### Action Items
+            - [ ] Review security scan results
+            - [ ] Address critical vulnerabilities
+            - [ ] Update dependencies if needed
+            - [ ] Verify container security
+            
+            **Workflow Run:** https://github.com/${context.repo.owner}/${context.repo.repo}/actions/runs/${context.runId}
+            `,
+            labels: ['security', 'critical', 'bug'],
+            assignees: ['terragon-labs/security-team']
+          });

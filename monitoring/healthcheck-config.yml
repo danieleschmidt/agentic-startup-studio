@@ -1,0 +1,174 @@
+# Health Check Configuration for Agentic Startup Studio
+# Comprehensive health monitoring for all system components
+
+health_checks:
+  # Core Application Health Checks
+  api_server:
+    name: "API Server Health"
+    url: "http://localhost:8000/health"
+    method: "GET"
+    timeout: 5s
+    interval: 30s
+    retries: 3
+    expected_status: 200
+    expected_content: "healthy"
+    headers:
+      User-Agent: "HealthCheck/1.0"
+    critical: true
+    
+  api_detailed:
+    name: "API Detailed Health"
+    url: "http://localhost:8000/health/detailed"
+    method: "GET"
+    timeout: 10s
+    interval: 60s
+    retries: 2
+    expected_status: 200
+    expected_content: "database"
+    critical: false
+    
+  # Database Health Checks
+  postgres_connection:
+    name: "PostgreSQL Connection"
+    type: "database"
+    connection_string: "postgresql://studio:studio@localhost:5432/studio"
+    query: "SELECT 1"
+    timeout: 5s
+    interval: 30s
+    retries: 3
+    critical: true
+    
+  postgres_performance:
+    name: "PostgreSQL Performance"
+    type: "database"
+    connection_string: "postgresql://studio:studio@localhost:5432/studio"
+    query: "SELECT count(*) FROM pg_stat_activity WHERE state = 'active'"
+    timeout: 10s
+    interval: 60s
+    expected_max: 50
+    critical: false
+    
+  # Redis Health Checks
+  redis_connection:
+    name: "Redis Connection"
+    type: "redis"
+    host: "localhost"
+    port: 6379
+    timeout: 5s
+    interval: 30s
+    retries: 3
+    critical: true
+    
+  redis_memory:
+    name: "Redis Memory Usage"
+    type: "redis"
+    host: "localhost"
+    port: 6379
+    command: "INFO memory"
+    timeout: 5s
+    interval: 60s
+    memory_threshold: 80  # percentage
+    critical: false
+    
+  # External Service Health Checks
+  openai_api:
+    name: "OpenAI API"
+    url: "https://api.openai.com/v1/models"
+    method: "GET"
+    timeout: 10s
+    interval: 300s  # 5 minutes
+    retries: 2
+    headers:
+      Authorization: "Bearer ${OPENAI_API_KEY}"
+    expected_status: 200
+    critical: false
+    
+  # Infrastructure Health Checks  
+  disk_space:
+    name: "Disk Space"
+    type: "system"
+    check: "disk_usage"
+    path: "/"
+    threshold: 85  # percentage
+    interval: 60s
+    critical: true
+    
+  memory_usage:
+    name: "Memory Usage"
+    type: "system"
+    check: "memory_usage"
+    threshold: 90  # percentage
+    interval: 30s
+    critical: true
+    
+  cpu_usage:
+    name: "CPU Usage"
+    type: "system"
+    check: "cpu_usage"
+    threshold: 95  # percentage
+    interval: 30s
+    duration: 300s  # Alert if high for 5 minutes
+    critical: false
+
+# Notification Configuration
+notifications:
+  slack:
+    enabled: true
+    webhook_url: "${SLACK_WEBHOOK_URL}"
+    channel: "#alerts"
+    username: "HealthBot"
+    icon_emoji: ":warning:"
+    
+  email:
+    enabled: false
+    smtp_server: "smtp.gmail.com"
+    smtp_port: 587
+    username: "${EMAIL_USERNAME}"
+    password: "${EMAIL_PASSWORD}"
+    from: "alerts@terragonlabs.com"
+    to: ["ops@terragonlabs.com"]
+    
+  pagerduty:
+    enabled: false
+    integration_key: "${PAGERDUTY_INTEGRATION_KEY}"
+    severity: "critical"
+
+# Health Check Groups
+groups:
+  critical:
+    - api_server
+    - postgres_connection
+    - redis_connection
+    - disk_space
+    - memory_usage
+    
+  performance:
+    - api_detailed
+    - postgres_performance
+    - redis_memory
+    - cpu_usage
+    
+  external:
+    - openai_api
+
+# Global Settings
+global:
+  timeout_default: 10s
+  retries_default: 3
+  check_interval: 30s
+  notification_cooldown: 300s  # 5 minutes between similar alerts
+  log_level: "INFO"
+  metrics_port: 9100
+  
+# SLA Definitions
+sla:
+  api_availability: 99.9   # API uptime target
+  response_time_p95: 200   # 95th percentile response time in ms
+  error_rate_max: 0.1      # Maximum error rate percentage
+  
+# Circuit Breaker Configuration
+circuit_breaker:
+  failure_threshold: 5      # Number of failures before opening
+  success_threshold: 3      # Number of successes needed to close
+  timeout: 60s             # How long to wait before half-open
+  reset_timeout: 300s      # How long to stay open
