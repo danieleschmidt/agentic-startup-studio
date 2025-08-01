@@ -1,0 +1,383 @@
+name: Performance Testing
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+    types: [ opened, synchronize, labeled ]
+  schedule:
+    # Run performance tests nightly at 3 AM UTC
+    - cron: '0 3 * * *'
+  workflow_dispatch:
+    inputs:
+      test_type:
+        description: 'Type of performance test'
+        required: true
+        default: 'smoke'
+        type: choice
+        options:
+          - smoke
+          - load
+          - stress
+          - spike
+          - volume
+          - endurance
+      duration:
+        description: 'Test duration (e.g., 5m, 30s)'
+        required: false
+        default: '5m'
+      virtual_users:
+        description: 'Number of virtual users'
+        required: false
+        default: '10'
+
+env:
+  PERFORMANCE_THRESHOLD_P95: 200  # 95th percentile response time in ms
+  PERFORMANCE_THRESHOLD_P99: 500  # 99th percentile response time in ms
+  ERROR_RATE_THRESHOLD: 1         # Maximum error rate percentage
+
+jobs:
+  performance-test:
+    name: Performance Test
+    runs-on: ubuntu-latest
+    
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_PASSWORD: test
+          POSTGRES_USER: test
+          POSTGRES_DB: test_studio
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+          
+      redis:
+        image: redis:7-alpine
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 6379:6379
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        cache: 'pip'
+        
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -e ".[dev]"
+        
+    - name: Set up Node.js for K6
+      uses: actions/setup-node@v4
+      with:
+        node-version: '20'
+        
+    - name: Install K6
+      run: |
+        sudo gpg -k
+        sudo gpg --no-default-keyring --keyring /usr/share/keyrings/k6-archive-keyring.gpg --keyserver hkp://keyserver.ubuntu.com:80 --recv-keys C5AD17C747E3415A3642D57D77C6C491D6AC1D69
+        echo "deb [signed-by=/usr/share/keyrings/k6-archive-keyring.gpg] https://dl.k6.io/deb stable main" | sudo tee /etc/apt/sources.list.d/k6.list
+        sudo apt-get update
+        sudo apt-get install k6
+        
+    - name: Start application
+      run: |
+        # Set test environment variables
+        export DATABASE_URL="postgresql://test:test@localhost:5432/test_studio"
+        export REDIS_URL="redis://localhost:6379/0"
+        export ENVIRONMENT=testing
+        
+        # Start the API server in background
+        python -m pipeline.api.gateway --host 0.0.0.0 --port 8000 &
+        APP_PID=$!
+        echo "APP_PID=$APP_PID" >> $GITHUB_ENV
+        
+        # Wait for application to be ready
+        timeout=60
+        while [ $timeout -gt 0 ]; do
+          if curl -f http://localhost:8000/health > /dev/null 2>&1; then
+            echo "Application is ready"
+            break
+          fi
+          echo "Waiting for application... ($timeout seconds remaining)"
+          sleep 2
+          timeout=$((timeout-2))
+        done
+        
+        if [ $timeout -eq 0 ]; then
+          echo "Application failed to start"
+          exit 1
+        fi
+        
+    - name: Warm up application
+      run: |
+        # Make a few requests to warm up the application
+        for i in {1..5}; do
+          curl -f http://localhost:8000/health || true
+          curl -f http://localhost:8000/health/detailed || true
+          sleep 1
+        done
+        
+    - name: Run Performance Tests
+      run: |
+        # Determine test parameters
+        TEST_TYPE="${{ github.event.inputs.test_type || 'smoke' }}"
+        DURATION="${{ github.event.inputs.duration || '5m' }}"
+        VUS="${{ github.event.inputs.virtual_users || '10' }}"
+        
+        # Set test-specific parameters
+        case "$TEST_TYPE" in
+          "smoke")
+            VUS=1
+            DURATION="30s"
+            ;;
+          "load")
+            VUS=10
+            DURATION="5m"
+            ;;
+          "stress")
+            VUS=50
+            DURATION="10m"
+            ;;
+          "spike")
+            VUS=100
+            DURATION="2m"
+            ;;
+          "volume")
+            VUS=20
+            DURATION="30m"
+            ;;
+          "endurance")
+            VUS=10
+            DURATION="1h"
+            ;;
+        esac
+        
+        echo "Running $TEST_TYPE test with $VUS VUs for $DURATION"
+        
+        # Run K6 performance test
+        k6 run \
+          --vus $VUS \
+          --duration $DURATION \
+          --out json=performance-results.json \
+          --summary-trend-stats="min,med,avg,p(95),p(99),max" \
+          tests/performance/load-test.js
+          
+    - name: Analyze Performance Results
+      run: |
+        python scripts/analyze-performance-results.py \
+          --results performance-results.json \
+          --thresholds p95:$PERFORMANCE_THRESHOLD_P95,p99:$PERFORMANCE_THRESHOLD_P99,error_rate:$ERROR_RATE_THRESHOLD \
+          --output performance-analysis.json \
+          --report performance-report.md
+          
+    - name: Performance Regression Check
+      if: github.event_name == 'pull_request'
+      run: |
+        # Download baseline performance data
+        gh run download --name performance-baseline || echo "No baseline found"
+        
+        # Compare with baseline
+        python scripts/performance-comparison.py \
+          --current performance-analysis.json \
+          --baseline baseline-performance.json \
+          --output comparison-report.md \
+          --threshold 10  # 10% regression threshold
+      env:
+        GH_TOKEN: ${{ github.token }}
+        
+    - name: Generate Performance Report
+      run: |
+        cat > performance-summary.md << EOF
+        # Performance Test Results
+        
+        **Test Type:** ${{ github.event.inputs.test_type || 'smoke' }}
+        **Duration:** ${{ github.event.inputs.duration || '5m' }}
+        **Virtual Users:** ${{ github.event.inputs.virtual_users || '10' }}
+        **Commit:** \`${{ github.sha }}\`
+        
+        ## Key Metrics
+        
+        | Metric | Value | Threshold | Status |
+        |--------|-------|-----------|--------|
+        EOF
+        
+        # Add metrics from analysis
+        python scripts/format-performance-metrics.py \
+          --analysis performance-analysis.json \
+          --append performance-summary.md
+          
+    - name: Comment PR with Performance Results
+      if: github.event_name == 'pull_request'
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          
+          // Read performance summary
+          let summary = '';
+          if (fs.existsSync('performance-summary.md')) {
+            summary = fs.readFileSync('performance-summary.md', 'utf8');
+          }
+          
+          // Read regression analysis if available
+          let regression = '';
+          if (fs.existsSync('comparison-report.md')) {
+            regression = fs.readFileSync('comparison-report.md', 'utf8');
+          }
+          
+          const body = `## 🚀 Performance Test Results
+          
+          ${summary}
+          
+          ${regression ? `### Regression Analysis\n${regression}` : ''}
+          
+          <details>
+          <summary>View detailed results</summary>
+          
+          - [Performance Analysis](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }})
+          - Test artifacts available in workflow run
+          
+          </details>`;
+          
+          github.rest.issues.createComment({
+            issue_number: context.issue.number,
+            owner: context.repo.owner,
+            repo: context.repo.repo,
+            body: body
+          });
+          
+    - name: Check Performance Thresholds
+      run: |
+        python scripts/check-performance-thresholds.py \
+          --analysis performance-analysis.json \
+          --fail-on-regression
+          
+    - name: Upload Performance Results
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-results-${{ github.run_id }}
+        path: |
+          performance-results.json
+          performance-analysis.json
+          performance-report.md
+          performance-summary.md
+          comparison-report.md
+        retention-days: 30
+        
+    - name: Save Baseline Performance Data
+      if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+      uses: actions/upload-artifact@v4
+      with:
+        name: performance-baseline
+        path: performance-analysis.json
+        retention-days: 90
+        
+    - name: Stop application
+      if: always()
+      run: |
+        if [ ! -z "$APP_PID" ] && kill -0 $APP_PID 2>/dev/null; then
+          kill $APP_PID
+        fi
+
+  benchmark-comparison:
+    name: Benchmark Comparison
+    runs-on: ubuntu-latest
+    needs: performance-test
+    if: github.event_name == 'schedule'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Download Performance Results
+      uses: actions/download-artifact@v4
+      with:
+        name: performance-results-${{ github.run_id }}
+        
+    - name: Generate Benchmark Report
+      run: |
+        python scripts/generate-benchmark-report.py \
+          --results performance-analysis.json \
+          --historical-data benchmark-history.json \
+          --output benchmark-report.html
+          
+    - name: Upload Benchmark Report
+      uses: actions/upload-artifact@v4
+      with:
+        name: benchmark-report
+        path: benchmark-report.html
+
+  performance-monitoring:
+    name: Performance Monitoring
+    runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    
+    steps:
+    - name: Checkout code
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Send Performance Metrics to Monitoring
+      run: |
+        # Send metrics to monitoring system (Prometheus, DataDog, etc.)
+        python scripts/send-performance-metrics.py \
+          --results performance-analysis.json \
+          --environment production \
+          --commit ${{ github.sha }}
+      env:
+        MONITORING_API_KEY: ${{ secrets.MONITORING_API_KEY }}
+        
+    - name: Update Performance Dashboard
+      run: |
+        # Update Grafana dashboard or similar
+        curl -X POST "${{ secrets.GRAFANA_API_URL }}/api/annotations" \
+          -H "Authorization: Bearer ${{ secrets.GRAFANA_API_TOKEN }}" \
+          -H "Content-Type: application/json" \
+          -d '{
+            "text": "Performance test completed - commit ${{ github.sha }}",
+            "time": '$(date +%s000)',
+            "tags": ["performance", "automated"]
+          }'
+
+  alert-on-regression:
+    name: Alert on Performance Regression
+    runs-on: ubuntu-latest
+    needs: performance-test
+    if: failure()
+    
+    steps:
+    - name: Send Alert
+      uses: 8398a7/action-slack@v3
+      with:
+        status: failure
+        channel: '#performance-alerts'
+        message: |
+          🐌 Performance regression detected!
+          
+          Repository: ${{ github.repository }}
+          Branch: ${{ github.ref }}
+          Commit: ${{ github.sha }}
+          
+          Please investigate immediately.
+      env:
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
