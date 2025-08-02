@@ -5,7 +5,7 @@
 # =============================================================================
 
 # Base image with security updates and multi-arch support
-FROM --platform=$BUILDPLATFORM python:3.11-slim-bullseye AS base
+FROM --platform=$BUILDPLATFORM python:3.13-slim-bullseye AS base
 
 # Security: Update base system and install security patches
 RUN apt-get update && apt-get upgrade -y && \
