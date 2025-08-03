@@ -196,7 +196,7 @@ graph TB
 
 ## Data Architecture
 
-### Data Model
+### Enhanced Data Model
 
 ```mermaid
 erDiagram
@@ -206,9 +206,15 @@ erDiagram
         text description
         enum status
         enum category
+        enum current_stage
+        float stage_progress
         timestamp created_at
         timestamp updated_at
         vector embedding
+        string created_by
+        json research_data
+        json investor_scores
+        string deck_path
     }
     
     RESEARCH_DATA {
@@ -216,8 +222,13 @@ erDiagram
         uuid idea_id FK
         json evidence
         json citations
+        json market_analysis
+        json competitive_landscape
         float confidence_score
+        float market_size_estimate
+        json risk_factors
         timestamp collected_at
+        string source_type
     }
     
     PITCH_DECKS {
@@ -226,7 +237,11 @@ erDiagram
         text content
         json metadata
         enum format
+        json sections
+        float quality_score
+        json reviewer_feedback
         timestamp generated_at
+        string template_version
     }
     
     SMOKE_TESTS {
@@ -234,13 +249,45 @@ erDiagram
         uuid idea_id FK
         json metrics
         json analytics
+        json performance_data
+        json user_feedback
         enum status
+        float success_rate
+        json cost_breakdown
         timestamp completed_at
+        string test_environment
+    }
+    
+    WORKFLOW_EXECUTIONS {
+        uuid id PK
+        uuid idea_id FK
+        string workflow_type
+        json input_data
+        json output_data
+        enum status
+        json error_details
+        float execution_time
+        timestamp started_at
+        timestamp completed_at
+        string agent_id
+    }
+    
+    AUDIT_TRAIL {
+        uuid id PK
+        uuid idea_id FK
+        string action
+        json changes
+        string user_id
+        string correlation_id
+        timestamp timestamp
+        json metadata
     }
     
     IDEAS ||--o{ RESEARCH_DATA : has
     IDEAS ||--o{ PITCH_DECKS : generates
     IDEAS ||--o{ SMOKE_TESTS : tests
+    IDEAS ||--o{ WORKFLOW_EXECUTIONS : executes
+    IDEAS ||--o{ AUDIT_TRAIL : tracks
 ```
 
 ### Storage Strategy

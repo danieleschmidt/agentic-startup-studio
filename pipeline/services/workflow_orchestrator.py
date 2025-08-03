@@ -27,6 +27,11 @@ from pipeline.services.budget_sentinel import (
     BudgetExceededException,
     get_budget_sentinel,
 )
+from pipeline.services.idea_analytics_service import (
+    IdeaAnalyticsService,
+    create_analytics_service,
+)
+from pipeline.models.idea import Idea
 
 
 class PipelineStage(Enum):
@@ -94,6 +99,7 @@ class WorkflowOrchestrator:
     def __init__(self):
         self.settings = get_settings()
         self.budget_sentinel = get_budget_sentinel()
+        self.analytics_service = create_analytics_service()
         self.logger = logging.getLogger(__name__)
 
         # Initialize LangGraph components
@@ -377,8 +383,63 @@ class WorkflowOrchestrator:
         await asyncio.sleep(0.1)  # Simulate processing
 
     async def _process_research_stage(self, state: WorkflowState):
-        """Process research stage - placeholder for actual implementation."""
-        state["research_data"] = {"evidence_count": 3, "quality_score": 0.8}
+        """Process research stage with enhanced analytics."""
+        idea_data = state.get("idea_data", {})
+        
+        # Create temporary Idea object for analytics
+        temp_idea = Idea(
+            title=idea_data.get("title", ""),
+            description=idea_data.get("description", ""),
+            category=idea_data.get("category", "uncategorized")
+        )
+        
+        # Simulate research data collection
+        research_data = {
+            "evidence_count": 3,
+            "quality_score": 0.8,
+            "market_size": {"value": 1500.0},
+            "growth_rate": 0.15,
+            "trends": ["AI automation", "Remote work"],
+            "competitors": {
+                "direct": [{"name": "Competitor A", "market_share": 0.2}],
+                "indirect": [{"name": "Competitor B", "market_share": 0.1}]
+            },
+            "sources": ["Industry Report 2025", "Market Research"]
+        }
+        
+        # Perform advanced analytics
+        try:
+            market_potential = await self.analytics_service.analyze_market_potential(
+                temp_idea, research_data
+            )
+            competitive_analysis = await self.analytics_service.analyze_competitive_landscape(
+                temp_idea, research_data
+            )
+            funding_potential = await self.analytics_service.calculate_funding_potential(
+                temp_idea, market_potential, competitive_analysis
+            )
+            
+            # Store enhanced research data
+            state["research_data"] = {
+                "evidence_count": research_data["evidence_count"],
+                "quality_score": research_data["quality_score"],
+                "market_potential": market_potential.dict(),
+                "competitive_analysis": competitive_analysis.dict(),
+                "funding_potential": funding_potential.dict(),
+                "raw_research": research_data
+            }
+            
+            self.logger.info(
+                f"Enhanced research completed for {state['idea_id']} - "
+                f"Market Score: {market_potential.overall_score:.2f}, "
+                f"Funding Score: {funding_potential.overall_funding_score:.2f}"
+            )
+            
+        except Exception as e:
+            self.logger.error(f"Enhanced research analysis failed: {e}")
+            # Fallback to basic research data
+            state["research_data"] = research_data
+        
         await asyncio.sleep(0.1)  # Simulate processing
 
     async def _process_deck_generation_stage(self, state: WorkflowState):
