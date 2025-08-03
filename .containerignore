@@ -1,0 +1,54 @@
+# Container security ignore patterns
+# Additional patterns for enhanced container security
+
+# High-risk development files
+*.key
+*.pem
+*.p12
+*.pfx
+*.crt
+*.csr
+id_rsa*
+id_dsa*
+id_ecdsa*
+id_ed25519*
+
+# Secrets and sensitive data
+.aws/
+.azure/
+.gcp/
+.kube/
+.docker/config.json
+.npmrc
+.pypirc
+.netrc
+
+# Development databases
+*.sqlite3
+*.db
+
+# Large files that don't belong in containers
+*.tar.gz
+*.zip
+*.iso
+*.dmg
+*.exe
+*.msi
+
+# OS-specific files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editor temporary files
+.#*
+*~
+*.swp
+*.swo
+
+# Runtime artifacts that shouldn't be baked in
+logs/
+tmp/
+cache/
+*.log
+*.pid
