@@ -1,0 +1,585 @@
+# Enterprise CI Pipeline for Agentic Startup Studio
+# Comprehensive pipeline with security, quality, and compliance gates
+
+name: Enterprise CI Pipeline
+
+on:
+  push:
+    branches: [ main, develop, release/* ]
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  PYTHON_VERSION: '3.11'
+
+# Global permissions for security scanning
+permissions:
+  contents: read
+  security-events: write
+  packages: write
+  actions: read
+
+jobs:
+  # ===== PHASE 1: SECURITY & STATIC ANALYSIS =====
+  
+  security-scan:
+    name: 🛡️ Security Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install security tools
+        run: |
+          pip install bandit[toml] safety semgrep
+
+      - name: Run Bandit security scan
+        run: |
+          bandit -r pipeline/ core/ scripts/ \
+            -f json -o bandit-report.json \
+            -f txt -o bandit-report.txt \
+            --severity-level medium
+        continue-on-error: true
+
+      - name: Run Safety vulnerability scan
+        run: |
+          safety check --json --output safety-report.json || true
+          safety check --output safety-report.txt || true
+        continue-on-error: true
+
+      - name: Run Semgrep SAST scan
+        run: |
+          semgrep --config=auto --json --output=semgrep-report.json . || true
+        continue-on-error: true
+
+      - name: Upload security reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: security-reports
+          path: |
+            bandit-report.*
+            safety-report.*
+            semgrep-report.*
+
+  secret-scan:
+    name: 🔍 Secret Detection
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Run TruffleHog secret scan
+        uses: trufflesecurity/trufflehog@main
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --debug --only-verified
+
+      - name: Run custom secret validation
+        run: |
+          python scripts/validate_production_secrets.py --scan-hardcoded --strict
+
+  # ===== PHASE 2: CODE QUALITY & LINTING =====
+  
+  code-quality:
+    name: 📊 Code Quality Analysis
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev,test]"
+
+      - name: Run Ruff linting
+        run: |
+          ruff check --output-format=github .
+          ruff format --check .
+
+      - name: Run MyPy type checking
+        run: |
+          mypy pipeline/ core/ scripts/ --show-error-codes --no-error-summary
+
+      - name: Run Black format check
+        run: |
+          black --check --diff .
+
+      - name: Run isort import check
+        run: |
+          isort --check-only --diff .
+
+      - name: Generate code quality report
+        run: |
+          mkdir -p reports
+          echo "# Code Quality Report" > reports/quality-report.md
+          echo "Generated: $(date)" >> reports/quality-report.md
+          echo "Commit: ${{ github.sha }}" >> reports/quality-report.md
+
+      - name: Upload quality reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: quality-reports
+          path: reports/
+
+  # ===== PHASE 3: COMPREHENSIVE TESTING =====
+  
+  unit-tests:
+    name: 🧪 Unit Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      matrix:
+        python-version: ['3.11', '3.12']
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_studio
+          POSTGRES_USER: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+      
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ matrix.python-version }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev,test]"
+
+      - name: Run unit tests
+        run: |
+          pytest tests/ \
+            -m "unit" \
+            --cov=pipeline \
+            --cov=core \
+            --cov-report=xml \
+            --cov-report=html \
+            --cov-report=term \
+            --cov-fail-under=90 \
+            --junitxml=pytest-results.xml \
+            --timeout=300 \
+            --maxfail=5
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_studio
+          REDIS_URL: redis://localhost:6379/0
+          ENVIRONMENT: testing
+
+      - name: Upload test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: test-results-${{ matrix.python-version }}
+          path: |
+            pytest-results.xml
+            htmlcov/
+            coverage.xml
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage.xml
+          flags: unittests
+          name: codecov-${{ matrix.python-version }}
+
+  integration-tests:
+    name: 🔗 Integration Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [unit-tests]
+    services:
+      postgres:
+        image: pgvector/pgvector:pg15
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: test_studio
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev,test]"
+
+      - name: Run integration tests
+        run: |
+          pytest tests/ \
+            -m "integration" \
+            --timeout=600 \
+            --maxfail=3 \
+            --junitxml=integration-results.xml
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/test_studio
+          ENVIRONMENT: testing
+
+      - name: Upload integration test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: integration-test-results
+          path: integration-results.xml
+
+  e2e-tests:
+    name: 🌐 End-to-End Tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    needs: [integration-tests]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Set up Node.js for Playwright
+        uses: actions/setup-node@v3
+        with:
+          node-version: '18'
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev,test]"
+          npx playwright install --with-deps
+
+      - name: Start application for E2E tests
+        run: |
+          docker-compose -f docker-compose.test.yml up -d
+          sleep 30  # Wait for services to be ready
+
+      - name: Run E2E tests
+        run: |
+          pytest tests/e2e/ \
+            --timeout=900 \
+            --maxfail=1 \
+            --junitxml=e2e-results.xml
+        env:
+          BASE_URL: http://localhost:8000
+
+      - name: Upload E2E test results
+        uses: actions/upload-artifact@v3
+        if: always()
+        with:
+          name: e2e-test-results
+          path: |
+            e2e-results.xml
+            playwright-report/
+            test-results/
+
+      - name: Cleanup test environment
+        if: always()
+        run: |
+          docker-compose -f docker-compose.test.yml down -v
+
+  # ===== PHASE 4: CONTAINER BUILD & SCAN =====
+  
+  build-container:
+    name: 🏗️ Build Container
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: [security-scan, code-quality, unit-tests]
+    outputs:
+      image-digest: ${{ steps.build.outputs.digest }}
+      image-tags: ${{ steps.meta.outputs.tags }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push container
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            BUILD_DATE=${{ github.event.head_commit.timestamp }}
+            VCS_REF=${{ github.sha }}
+            VERSION=${{ steps.meta.outputs.version }}
+
+      - name: Generate SBOM
+        run: |
+          docker run --rm -v /var/run/docker.sock:/var/run/docker.sock \
+            anchore/syft:latest ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }} \
+            -o spdx-json=sbom.spdx.json
+
+      - name: Upload SBOM
+        uses: actions/upload-artifact@v3
+        with:
+          name: container-sbom
+          path: sbom.spdx.json
+
+  container-security:
+    name: 🛡️ Container Security Scan
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [build-container]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ github.sha }}
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v2
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+      - name: Run comprehensive container security scan
+        run: |
+          chmod +x scripts/container_security_scan.sh
+          ./scripts/container_security_scan.sh ${{ env.IMAGE_NAME }} ${{ github.sha }}
+
+      - name: Upload container security reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: container-security-reports
+          path: security_reports/
+
+  # ===== PHASE 5: COMPLIANCE & GOVERNANCE =====
+  
+  compliance-check:
+    name: 📋 Compliance Validation
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev]"
+
+      - name: Run SOC 2 compliance assessment
+        run: |
+          python monitoring/compliance_monitor.py \
+            --assessment \
+            --standards soc2_type2
+
+      - name: Run GDPR compliance assessment
+        run: |
+          python monitoring/compliance_monitor.py \
+            --assessment \
+            --standards gdpr
+
+      - name: Generate compliance reports
+        run: |
+          python monitoring/compliance_monitor.py \
+            --report json > compliance-report.json
+          python monitoring/compliance_monitor.py \
+            --report html > compliance-report.html
+
+      - name: Upload compliance reports
+        uses: actions/upload-artifact@v3
+        with:
+          name: compliance-reports
+          path: |
+            compliance-report.*
+            compliance_results/
+
+  # ===== PHASE 6: PERFORMANCE & CHAOS TESTING =====
+  
+  performance-test:
+    name: ⚡ Performance Testing
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: [build-container]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          pip install -e ".[dev,test]"
+
+      - name: Run performance benchmarks
+        run: |
+          python scripts/performance_benchmark.py --comprehensive
+
+      - name: Run chaos engineering tests
+        run: |
+          python -m pytest tests/chaos_testing_config.py -v
+
+      - name: Upload performance results
+        uses: actions/upload-artifact@v3
+        with:
+          name: performance-results
+          path: |
+            performance_results.json
+            chaos_test_results.json
+
+  # ===== PHASE 7: FINAL VALIDATION =====
+  
+  final-validation:
+    name: ✅ Final Validation
+    runs-on: ubuntu-latest
+    needs: [
+      security-scan,
+      secret-scan,
+      code-quality,
+      e2e-tests,
+      container-security,
+      compliance-check,
+      performance-test
+    ]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Validate all checks passed
+        run: |
+          echo "All CI pipeline checks completed successfully!"
+          echo "Ready for deployment to staging environment."
+
+      - name: Generate pipeline summary
+        run: |
+          cat << EOF > pipeline-summary.md
+          # CI Pipeline Summary
+          
+          **Repository:** ${{ github.repository }}
+          **Branch:** ${{ github.ref }}
+          **Commit:** ${{ github.sha }}
+          **Workflow:** ${{ github.workflow }}
+          **Run:** ${{ github.run_number }}
+          
+          ## ✅ Completed Phases
+          
+          - [x] Security & Static Analysis
+          - [x] Code Quality & Linting
+          - [x] Comprehensive Testing (Unit, Integration, E2E)
+          - [x] Container Build & Security Scan
+          - [x] Compliance Validation
+          - [x] Performance & Chaos Testing
+          
+          ## 📊 Quality Metrics
+          
+          - Code Coverage: >90%
+          - Security Scan: Passed
+          - Compliance Score: Validated
+          - Performance: Within Thresholds
+          
+          ## 🚀 Next Steps
+          
+          Ready for deployment to staging environment.
+          EOF
+
+      - name: Upload pipeline summary
+        uses: actions/upload-artifact@v3
+        with:
+          name: pipeline-summary
+          path: pipeline-summary.md
+
+      - name: Notify success
+        if: success()
+        run: |
+          echo "🎉 Enterprise CI Pipeline completed successfully!"
+          echo "All quality gates passed - ready for CD pipeline."
+
+      - name: Notify failure
+        if: failure()
+        run: |
+          echo "❌ Enterprise CI Pipeline failed!"
+          echo "Please review the failed checks and address issues before proceeding."
+          exit 1

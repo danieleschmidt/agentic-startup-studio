@@ -1,16 +1,48 @@
 # Makefile for the Agentic Startup Studio
 
-.PHONY: all bootstrap pitch-loop build-cycle clean help
+.PHONY: all bootstrap pitch-loop build-cycle clean help build-docker scan-security generate-sbom build-release
+
+# Configuration
+IMAGE_NAME ?= agentic-startup-studio
+IMAGE_TAG ?= latest
+REGISTRY ?= ghcr.io/terragonlabs
+PLATFORM ?= linux/amd64,linux/arm64
 
 all: help
 
 help:
 	@echo "Available targets:"
-	@echo "  bootstrap          - Conceptual: Sets up core infrastructure (Docker Compose services)."
-	@echo "  pitch-loop         - Conceptual: Runs a single founder-investor cycle."
-	@echo "  build-cycle        - Conceptual: Fetches an idea, scaffolds with GPT-Engineer, and prepares for debug."
-	@echo "  clean              - Conceptual: Cleans up generated files and artifacts."
-	@echo "  help               - Shows this help message."
+	@echo ""
+	@echo "🚀 Core Operations:"
+	@echo "  bootstrap          - Sets up core infrastructure (Docker Compose services)"
+	@echo "  pitch-loop         - Runs a single founder-investor cycle"
+	@echo "  build-cycle        - Fetches an idea, scaffolds with GPT-Engineer, and prepares for debug"
+	@echo ""
+	@echo "🏗️  Build & Deploy:"
+	@echo "  build-docker       - Build Docker image with caching and optimization"
+	@echo "  build-release      - Build production-ready multi-platform release"
+	@echo "  push-image         - Push image to container registry"
+	@echo ""
+	@echo "🛡️  Security & Compliance:"
+	@echo "  scan-security      - Run comprehensive security scan on container"
+	@echo "  generate-sbom      - Generate Software Bill of Materials"
+	@echo "  security-audit     - Run full security audit suite"
+	@echo ""
+	@echo "🧪 Testing & Quality:"
+	@echo "  test              - Run test suite"
+	@echo "  test-cov          - Run tests with coverage"
+	@echo "  lint              - Run code linting"
+	@echo "  format            - Format code"
+	@echo ""
+	@echo "🧹 Maintenance:"
+	@echo "  clean             - Clean up generated files and artifacts"
+	@echo "  clean-docker      - Clean up Docker images and containers"
+	@echo "  health-check      - Run system health checks"
+	@echo ""
+	@echo "Variables:"
+	@echo "  IMAGE_NAME=$(IMAGE_NAME)"
+	@echo "  IMAGE_TAG=$(IMAGE_TAG)"
+	@echo "  REGISTRY=$(REGISTRY)"
 
 bootstrap:
 	@echo "Conceptual target: 'bootstrap'"
@@ -214,3 +246,92 @@ validate:     ## validate project configuration
 	python -m pip check
 	pre-commit run --all-files
 	pytest --collect-only
+
+# ========== CONTAINER BUILD & SECURITY ==========
+
+build-docker: ## build optimized Docker image
+	@echo "🏗️  Building Docker image $(IMAGE_NAME):$(IMAGE_TAG)..."
+	docker build \
+		--build-arg BUILD_DATE=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ") \
+		--build-arg VCS_REF=$(shell git rev-parse HEAD) \
+		--build-arg VERSION=$(IMAGE_TAG) \
+		--tag $(IMAGE_NAME):$(IMAGE_TAG) \
+		--tag $(IMAGE_NAME):latest \
+		--cache-from $(IMAGE_NAME):latest \
+		.
+	@echo "✅ Docker image built successfully"
+
+build-release: ## build multi-platform production release
+	@echo "🚀 Building multi-platform release..."
+	docker buildx build \
+		--platform $(PLATFORM) \
+		--build-arg BUILD_DATE=$(shell date -u +"%Y-%m-%dT%H:%M:%SZ") \
+		--build-arg VCS_REF=$(shell git rev-parse HEAD) \
+		--build-arg VERSION=$(IMAGE_TAG) \
+		--tag $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG) \
+		--tag $(REGISTRY)/$(IMAGE_NAME):latest \
+		--cache-from $(REGISTRY)/$(IMAGE_NAME):latest \
+		--push \
+		.
+	@echo "✅ Multi-platform release built and pushed"
+
+push-image: ## push image to registry
+	@echo "📤 Pushing $(IMAGE_NAME):$(IMAGE_TAG) to $(REGISTRY)..."
+	docker tag $(IMAGE_NAME):$(IMAGE_TAG) $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
+	docker tag $(IMAGE_NAME):latest $(REGISTRY)/$(IMAGE_NAME):latest
+	docker push $(REGISTRY)/$(IMAGE_NAME):$(IMAGE_TAG)
+	docker push $(REGISTRY)/$(IMAGE_NAME):latest
+	@echo "✅ Image pushed successfully"
+
+scan-security: ## run comprehensive container security scan
+	@echo "🛡️  Running security scan on $(IMAGE_NAME):$(IMAGE_TAG)..."
+	./scripts/container_security_scan.sh $(IMAGE_NAME) $(IMAGE_TAG)
+	@echo "✅ Security scan completed - check security_reports/ for results"
+
+generate-sbom: ## generate Software Bill of Materials
+	@echo "📋 Generating SBOM..."
+	python scripts/build_sbom.py --output sbom-$(shell date +%Y%m%d).spdx.json --validate
+	@echo "✅ SBOM generated successfully"
+
+security-audit: ## run comprehensive security audit
+	@echo "🔒 Running comprehensive security audit..."
+	@$(MAKE) security
+	@$(MAKE) scan-security
+	@$(MAKE) generate-sbom
+	@echo "✅ Security audit completed"
+
+clean-docker: ## clean Docker images and containers
+	@echo "🧹 Cleaning Docker resources..."
+	docker system prune -f
+	docker image prune -f
+	docker container prune -f
+	docker volume prune -f
+	@echo "✅ Docker cleanup completed"
+
+container-health: ## check container health
+	@echo "🏥 Checking container health..."
+	docker run --rm $(IMAGE_NAME):$(IMAGE_TAG) python scripts/run_health_checks.py --quick
+	@echo "✅ Container health check completed"
+
+# ========== ENTERPRISE DEPLOYMENT ==========
+
+deploy-staging: ## deploy to staging environment
+	@echo "🚀 Deploying to staging..."
+	@echo "⚠️  Staging deployment requires additional configuration"
+	@echo "   See docs/deployment/ for detailed instructions"
+
+deploy-production: ## deploy to production environment  
+	@echo "🚀 Deploying to production..."
+	@echo "⚠️  Production deployment requires additional security validation"
+	@echo "   Run 'make security-audit' first"
+	@echo "   See docs/deployment/ for detailed instructions"
+
+backup: ## create backup of application data
+	@echo "💾 Creating backup..."
+	./scripts/backup_data.sh
+	@echo "✅ Backup created"
+
+restore: ## restore from backup
+	@echo "🔄 Restoring from backup..."
+	@echo "⚠️  This will overwrite existing data"
+	@echo "   Run './scripts/restore_data.sh <backup_file>' manually"

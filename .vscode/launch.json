@@ -1,0 +1,85 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "🚀 Start API Server",
+      "type": "python",
+      "request": "launch",
+      "program": "scripts/serve_api.py",
+      "args": ["--port", "8000", "--reload"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "env": {
+        "PYTHONPATH": "${workspaceFolder}",
+        "ENVIRONMENT": "development"
+      },
+      "preLaunchTask": "Health Check"
+    },
+    {
+      "name": "🧪 Run Specific Test",
+      "type": "python",
+      "request": "launch",
+      "module": "pytest",
+      "args": [
+        "${file}",
+        "-v",
+        "--tb=short"
+      ],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "name": "🏃 Run Pipeline Demo",
+      "type": "python",
+      "request": "launch",
+      "program": "pipeline/demo_pipeline.py",
+      "args": ["--idea", "AI-powered fitness tracker"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "name": "🔍 Debug Main Pipeline",
+      "type": "python",
+      "request": "launch",
+      "program": "pipeline/main_pipeline.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env",
+      "stopOnEntry": false,
+      "justMyCode": false
+    },
+    {
+      "name": "📊 Health Check Debug",
+      "type": "python",
+      "request": "launch",
+      "program": "scripts/run_health_checks.py",
+      "args": ["--verbose", "--detailed"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "name": "🛡️ Security Scan",
+      "type": "python",
+      "request": "launch",
+      "program": "scripts/security_scan.py",
+      "args": ["--comprehensive"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env"
+    },
+    {
+      "name": "⚡ Performance Benchmark",
+      "type": "python",
+      "request": "launch",
+      "program": "scripts/performance_benchmark.py",
+      "args": ["--full-suite"],
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}",
+      "envFile": "${workspaceFolder}/.env"
+    }
+  ]
+}
