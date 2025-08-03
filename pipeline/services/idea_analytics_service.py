@@ -11,7 +11,7 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Tuple
 from uuid import UUID
 
-import numpy as np
+import random
 from pydantic import BaseModel
 
 from pipeline.models.idea import Idea, IdeaCategory, PipelineStage
@@ -402,7 +402,7 @@ class IdeaAnalyticsService:
         
         # This would integrate with actual competitive intelligence
         # For now, return base score with some randomization for demo
-        return min(1.0, max(0.1, base_score + np.random.normal(0, 0.1)))
+        return min(1.0, max(0.1, base_score + random.uniform(-0.1, 0.1)))
     
     async def _calculate_timing_score(
         self, 

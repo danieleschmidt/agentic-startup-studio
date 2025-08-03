@@ -11,8 +11,6 @@ from datetime import datetime, timezone
 from typing import Dict, List, Optional, Any, Tuple
 from uuid import UUID
 import json
-import aiohttp
-from urllib.parse import quote_plus
 
 from pydantic import BaseModel
 
