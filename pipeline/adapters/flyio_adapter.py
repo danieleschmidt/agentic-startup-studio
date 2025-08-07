@@ -10,16 +10,18 @@ Provides functionality to interact with Fly.io API including:
 """
 
 import asyncio
-import logging
-from datetime import datetime, timezone, timedelta
-from typing import Dict, Any, List, Optional, Union
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from enum import Enum
-import json
+from typing import Any
 
 from pipeline.adapters.base_adapter import (
-    BaseAdapter, AdapterConfig, AuthType, RetryStrategy,
-    AdapterError, APIError, AuthenticationError
+    AdapterConfig,
+    AdapterError,
+    APIError,
+    AuthType,
+    BaseAdapter,
+    RetryStrategy,
 )
 from pipeline.config.settings import get_settings
 from pipeline.infrastructure.observability import get_logger, performance_monitor
@@ -88,27 +90,27 @@ class RegionCode(Enum):
 @dataclass
 class FlyioConfig(AdapterConfig):
     """Configuration for Fly.io adapter."""
-    
+
     # API configuration
-    api_token: Optional[str] = None
+    api_token: str | None = None
     graphql_endpoint: str = "https://api.fly.io/graphql"
     machines_endpoint: str = "https://api.machines.dev/v1"
-    
+
     # Default settings
     default_region: RegionCode = RegionCode.IAD
     default_machine_size: str = "shared-cpu-1x"
     default_memory_mb: int = 256
     default_disk_gb: int = 1
-    
+
     # Deployment settings
     deployment_timeout_seconds: int = 600
     health_check_timeout_seconds: int = 60
     scale_timeout_seconds: int = 300
-    
+
     def __post_init__(self):
         """Validate Fly.io specific configuration."""
         super().__post_init__()
-        
+
         if not self.api_token:
             raise ValueError("api_token is required for Fly.io API")
 
@@ -123,11 +125,11 @@ class AppConfig:
     cpu_cores: float = 1.0
     disk_gb: int = 1
     port: int = 8080
-    env_vars: Dict[str, str] = field(default_factory=dict)
-    secrets: Dict[str, str] = field(default_factory=dict)
-    volumes: List[Dict[str, Any]] = field(default_factory=list)
-    services: List[Dict[str, Any]] = field(default_factory=list)
-    health_checks: List[Dict[str, Any]] = field(default_factory=list)
+    env_vars: dict[str, str] = field(default_factory=dict)
+    secrets: dict[str, str] = field(default_factory=dict)
+    volumes: list[dict[str, Any]] = field(default_factory=list)
+    services: list[dict[str, Any]] = field(default_factory=list)
+    health_checks: list[dict[str, Any]] = field(default_factory=list)
 
 
 @dataclass
@@ -135,13 +137,13 @@ class DeploymentConfig:
     """Configuration for application deployment."""
     app_name: str
     image: str
-    region: Optional[RegionCode] = None
+    region: RegionCode | None = None
     strategy: str = "rolling"
     max_unavailable: int = 1
     wait_timeout_seconds: int = 600
     auto_rollback: bool = True
-    env_vars: Dict[str, str] = field(default_factory=dict)
-    secrets: Dict[str, str] = field(default_factory=dict)
+    env_vars: dict[str, str] = field(default_factory=dict)
+    secrets: dict[str, str] = field(default_factory=dict)
 
 
 @dataclass
@@ -152,20 +154,20 @@ class ScalingConfig:
     max_instances: int = 3
     target_cpu_percent: float = 70.0
     target_memory_percent: float = 80.0
-    regions: List[RegionCode] = field(default_factory=list)
+    regions: list[RegionCode] = field(default_factory=list)
 
 
 @dataclass
 class MachineConfig:
     """Configuration for Fly.io machine."""
-    name: Optional[str] = None
+    name: str | None = None
     image: str = ""
     region: RegionCode = RegionCode.IAD
     size: str = "shared-cpu-1x"
     memory_mb: int = 256
     cpu_cores: float = 1.0
-    env_vars: Dict[str, str] = field(default_factory=dict)
-    services: List[Dict[str, Any]] = field(default_factory=list)
+    env_vars: dict[str, str] = field(default_factory=dict)
+    services: list[dict[str, Any]] = field(default_factory=list)
     restart_policy: str = "on-failure"
 
 
@@ -197,37 +199,37 @@ class FlyioAdapter(BaseAdapter):
     - Manage configuration and secrets
     - Handle domain and certificate management
     """
-    
+
     def __init__(self, config: FlyioConfig):
         if not isinstance(config, FlyioConfig):
             raise ValueError("FlyioConfig required for FlyioAdapter")
-        
+
         # Set base URL for Fly.io GraphQL API
         config.base_url = config.graphql_endpoint
         config.auth_type = AuthType.BEARER_TOKEN
         config.bearer_token = config.api_token
         config.circuit_breaker_name = "flyio_adapter"
-        
+
         super().__init__(config)
         self.config: FlyioConfig = config
-        
-        self.logger.info(f"Initialized Fly.io adapter")
-    
-    async def _get_auth_headers(self) -> Dict[str, str]:
+
+        self.logger.info("Initialized Fly.io adapter")
+
+    async def _get_auth_headers(self) -> dict[str, str]:
         """Get authentication headers for Fly.io API."""
         return {
             'Authorization': f'Bearer {self.config.api_token}',
             'Content-Type': 'application/json'
         }
-    
+
     @performance_monitor("flyio_health_check")
-    async def health_check(self) -> Dict[str, Any]:
+    async def health_check(self) -> dict[str, Any]:
         """Check Fly.io API connectivity and account status."""
         try:
             # Test API connectivity with user info query
             headers = await self._get_auth_headers()
             self._session.headers.update(headers)
-            
+
             query = """
             query {
                 viewer {
@@ -242,34 +244,34 @@ class FlyioAdapter(BaseAdapter):
                 }
             }
             """
-            
+
             response = await self.post_json("", {"query": query})
-            
+
             if "errors" in response:
                 raise APIError(f"GraphQL errors: {response['errors']}")
-            
+
             viewer = response.get("data", {}).get("viewer", {})
             orgs = response.get("data", {}).get("organizations", {}).get("nodes", [])
-            
+
             return {
                 'status': 'healthy',
                 'service': 'Fly.io Platform',
                 'user_email': viewer.get('email'),
                 'user_name': viewer.get('name'),
                 'organization_count': len(orgs),
-                'timestamp': datetime.now(timezone.utc).isoformat()
+                'timestamp': datetime.now(UTC).isoformat()
             }
-            
+
         except Exception as e:
             self.logger.error(f"Fly.io health check failed: {e}")
             return {
                 'status': 'unhealthy',
                 'service': 'Fly.io Platform',
                 'error': str(e),
-                'timestamp': datetime.now(timezone.utc).isoformat()
+                'timestamp': datetime.now(UTC).isoformat()
             }
-    
-    async def get_service_info(self) -> Dict[str, Any]:
+
+    async def get_service_info(self) -> dict[str, Any]:
         """Get Fly.io service information."""
         return {
             'service_name': 'Fly.io Platform',
@@ -286,14 +288,14 @@ class FlyioAdapter(BaseAdapter):
                 'certificate_management'
             ]
         }
-    
+
     @performance_monitor("flyio_create_app")
-    async def create_app(self, app_config: AppConfig) -> Dict[str, Any]:
+    async def create_app(self, app_config: AppConfig) -> dict[str, Any]:
         """Create a new Fly.io application."""
         try:
             headers = await self._get_auth_headers()
             self._session.headers.update(headers)
-            
+
             # GraphQL mutation to create app
             mutation = """
             mutation($input: CreateAppInput!) {
@@ -312,7 +314,7 @@ class FlyioAdapter(BaseAdapter):
                 }
             }
             """
-            
+
             variables = {
                 "input": {
                     "name": app_config.name,
@@ -320,19 +322,19 @@ class FlyioAdapter(BaseAdapter):
                     "organizationId": None  # Use default organization
                 }
             }
-            
+
             response = await self.post_json("", {
                 "query": mutation,
                 "variables": variables
             })
-            
+
             if "errors" in response:
                 raise APIError(f"Failed to create app: {response['errors']}")
-            
+
             app_data = response["data"]["createApp"]["app"]
-            
+
             self.logger.info(f"Successfully created app: {app_config.name}")
-            
+
             return {
                 'app_id': app_data['id'],
                 'app_name': app_data['name'],
@@ -341,18 +343,18 @@ class FlyioAdapter(BaseAdapter):
                 'app_url': app_data['appUrl'],
                 'organization': app_data['organization']['slug'] if app_data['organization'] else None
             }
-            
+
         except Exception as e:
             self.logger.error(f"Failed to create app: {e}")
             raise AdapterError(f"Failed to create app: {str(e)}")
-    
+
     @performance_monitor("flyio_deploy_app")
-    async def deploy_app(self, deployment_config: DeploymentConfig) -> Dict[str, Any]:
+    async def deploy_app(self, deployment_config: DeploymentConfig) -> dict[str, Any]:
         """Deploy application to Fly.io."""
         try:
             headers = await self._get_auth_headers()
             self._session.headers.update(headers)
-            
+
             # GraphQL mutation to deploy app
             mutation = """
             mutation($input: DeployImageInput!) {
@@ -367,7 +369,7 @@ class FlyioAdapter(BaseAdapter):
                 }
             }
             """
-            
+
             variables = {
                 "input": {
                     "appId": deployment_config.app_name,
@@ -379,21 +381,21 @@ class FlyioAdapter(BaseAdapter):
                     "strategy": deployment_config.strategy.upper()
                 }
             }
-            
+
             # Add region if specified
             if deployment_config.region:
                 variables["input"]["definition"]["primaryRegion"] = deployment_config.region.value
-            
+
             response = await self.post_json("", {
                 "query": mutation,
                 "variables": variables
             })
-            
+
             if "errors" in response:
                 raise APIError(f"Failed to deploy app: {response['errors']}")
-            
+
             release_data = response["data"]["deployImage"]["release"]
-            
+
             # Wait for deployment to complete if timeout specified
             if deployment_config.wait_timeout_seconds > 0:
                 await self._wait_for_deployment(
@@ -401,9 +403,9 @@ class FlyioAdapter(BaseAdapter):
                     release_data["id"],
                     deployment_config.wait_timeout_seconds
                 )
-            
+
             self.logger.info(f"Successfully deployed app: {deployment_config.app_name}")
-            
+
             return {
                 'release_id': release_data['id'],
                 'version': release_data['version'],
@@ -412,43 +414,43 @@ class FlyioAdapter(BaseAdapter):
                 'created_at': release_data['createdAt'],
                 'app_name': deployment_config.app_name
             }
-            
+
         except Exception as e:
             self.logger.error(f"Failed to deploy app: {e}")
             raise AdapterError(f"Failed to deploy app: {str(e)}")
-    
+
     async def _wait_for_deployment(self, app_name: str, release_id: str, timeout_seconds: int) -> None:
         """Wait for deployment to complete."""
         start_time = datetime.now()
         timeout = timedelta(seconds=timeout_seconds)
-        
+
         while datetime.now() - start_time < timeout:
             try:
                 # Check deployment status
                 status = await self.get_deployment_status(app_name, release_id)
-                
+
                 if status['status'] in ['SUCCEEDED', 'DEPLOYED']:
                     self.logger.info(f"Deployment {release_id} completed successfully")
                     return
-                elif status['status'] in ['FAILED', 'CANCELLED']:
+                if status['status'] in ['FAILED', 'CANCELLED']:
                     raise AdapterError(f"Deployment {release_id} failed: {status['status']}")
-                
+
                 # Wait before next check
                 await asyncio.sleep(10)
-                
+
             except Exception as e:
                 self.logger.warning(f"Error checking deployment status: {e}")
                 await asyncio.sleep(10)
-        
+
         raise AdapterError(f"Deployment {release_id} timed out after {timeout_seconds} seconds")
-    
+
     @performance_monitor("flyio_get_deployment_status")
-    async def get_deployment_status(self, app_name: str, release_id: str) -> Dict[str, Any]:
+    async def get_deployment_status(self, app_name: str, release_id: str) -> dict[str, Any]:
         """Get deployment status."""
         try:
             headers = await self._get_auth_headers()
             self._session.headers.update(headers)
-            
+
             query = """
             query($appName: String!, $releaseId: ID!) {
                 app(name: $appName) {
@@ -463,22 +465,22 @@ class FlyioAdapter(BaseAdapter):
                 }
             }
             """
-            
+
             variables = {
                 "appName": app_name,
                 "releaseId": release_id
             }
-            
+
             response = await self.post_json("", {
                 "query": query,
                 "variables": variables
             })
-            
+
             if "errors" in response:
                 raise APIError(f"Failed to get deployment status: {response['errors']}")
-            
+
             release_data = response["data"]["app"]["release"]
-            
+
             return {
                 'release_id': release_data['id'],
                 'version': release_data['version'],
@@ -487,18 +489,18 @@ class FlyioAdapter(BaseAdapter):
                 'created_at': release_data['createdAt'],
                 'description': release_data.get('description')
             }
-            
+
         except Exception as e:
             self.logger.error(f"Failed to get deployment status: {e}")
             raise AdapterError(f"Failed to get deployment status: {str(e)}")
-    
+
     @performance_monitor("flyio_scale_app")
-    async def scale_app(self, scaling_config: ScalingConfig) -> Dict[str, Any]:
+    async def scale_app(self, scaling_config: ScalingConfig) -> dict[str, Any]:
         """Scale application instances."""
         try:
             headers = await self._get_auth_headers()
             self._session.headers.update(headers)
-            
+
             # GraphQL mutation to scale app
             mutation = """
             mutation($input: ScaleAppInput!) {
@@ -510,10 +512,10 @@ class FlyioAdapter(BaseAdapter):
                 }
             }
             """
-            
+
             # Build regions list
             regions = [region.value for region in scaling_config.regions] if scaling_config.regions else [self.config.default_region.value]
-            
+
             variables = {
                 "input": {
                     "appId": scaling_config.app_name,
@@ -526,36 +528,36 @@ class FlyioAdapter(BaseAdapter):
                     ]
                 }
             }
-            
+
             response = await self.post_json("", {
                 "query": mutation,
                 "variables": variables
             })
-            
+
             if "errors" in response:
                 raise APIError(f"Failed to scale app: {response['errors']}")
-            
+
             placement_data = response["data"]["scaleApp"]["placement"]
-            
+
             self.logger.info(f"Successfully scaled app: {scaling_config.app_name}")
-            
+
             return {
                 'app_name': scaling_config.app_name,
                 'placement': placement_data,
                 'total_instances': sum(p['count'] for p in placement_data)
             }
-            
+
         except Exception as e:
             self.logger.error(f"Failed to scale app: {e}")
             raise AdapterError(f"Failed to scale app: {str(e)}")
-    
+
     @performance_monitor("flyio_get_apps")
-    async def get_apps(self, organization_slug: Optional[str] = None) -> List[Dict[str, Any]]:
+    async def get_apps(self, organization_slug: str | None = None) -> list[dict[str, Any]]:
         """Get list of applications."""
         try:
             headers = await self._get_auth_headers()
             self._session.headers.update(headers)
-            
+
             query = """
             query($organizationSlug: String) {
                 apps(organizationSlug: $organizationSlug) {
@@ -578,19 +580,19 @@ class FlyioAdapter(BaseAdapter):
                 }
             }
             """
-            
+
             variables = {"organizationSlug": organization_slug} if organization_slug else {}
-            
+
             response = await self.post_json("", {
                 "query": query,
                 "variables": variables
             })
-            
+
             if "errors" in response:
                 raise APIError(f"Failed to get apps: {response['errors']}")
-            
+
             apps_data = response["data"]["apps"]["nodes"]
-            
+
             apps = []
             for app in apps_data:
                 apps.append({
@@ -605,24 +607,24 @@ class FlyioAdapter(BaseAdapter):
                     'current_version': app['currentRelease']['version'] if app['currentRelease'] else None,
                     'release_status': app['currentRelease']['status'] if app['currentRelease'] else None
                 })
-            
+
             self.logger.info(f"Retrieved {len(apps)} applications")
             return apps
-            
+
         except Exception as e:
             self.logger.error(f"Failed to get apps: {e}")
             raise AdapterError(f"Failed to get apps: {str(e)}")
-    
+
     @performance_monitor("flyio_get_app_metrics")
-    async def get_app_metrics(self, app_name: str, time_range_hours: int = 1) -> List[AppMetrics]:
+    async def get_app_metrics(self, app_name: str, time_range_hours: int = 1) -> list[AppMetrics]:
         """Get application metrics."""
         try:
             # Note: This is a simplified implementation
             # In practice, you would use Fly.io's metrics API or Prometheus integration
-            
+
             headers = await self._get_auth_headers()
             self._session.headers.update(headers)
-            
+
             # Get app status first
             query = """
             query($appName: String!) {
@@ -642,24 +644,24 @@ class FlyioAdapter(BaseAdapter):
                 }
             }
             """
-            
+
             variables = {"appName": app_name}
-            
+
             response = await self.post_json("", {
                 "query": query,
                 "variables": variables
             })
-            
+
             if "errors" in response:
                 raise APIError(f"Failed to get app metrics: {response['errors']}")
-            
+
             app_data = response["data"]["app"]
             machines = app_data["machines"]["nodes"]
-            
+
             # Generate sample metrics (in production, this would come from actual metrics)
             metrics = []
-            current_time = datetime.now(timezone.utc)
-            
+            current_time = datetime.now(UTC)
+
             # Create aggregate metrics for the app
             app_metrics = AppMetrics(
                 app_name=app_name,
@@ -675,23 +677,23 @@ class FlyioAdapter(BaseAdapter):
                 response_time_ms=120.0,
                 timestamp=current_time
             )
-            
+
             metrics.append(app_metrics)
-            
+
             self.logger.info(f"Retrieved metrics for app: {app_name}")
             return metrics
-            
+
         except Exception as e:
             self.logger.error(f"Failed to get app metrics: {e}")
             raise AdapterError(f"Failed to get app metrics: {str(e)}")
-    
+
     @performance_monitor("flyio_set_secrets")
-    async def set_secrets(self, app_name: str, secrets: Dict[str, str]) -> bool:
+    async def set_secrets(self, app_name: str, secrets: dict[str, str]) -> bool:
         """Set application secrets."""
         try:
             headers = await self._get_auth_headers()
             self._session.headers.update(headers)
-            
+
             # GraphQL mutation to set secrets
             mutation = """
             mutation($input: SetSecretsInput!) {
@@ -703,7 +705,7 @@ class FlyioAdapter(BaseAdapter):
                 }
             }
             """
-            
+
             variables = {
                 "input": {
                     "appId": app_name,
@@ -713,29 +715,29 @@ class FlyioAdapter(BaseAdapter):
                     ]
                 }
             }
-            
+
             response = await self.post_json("", {
                 "query": mutation,
                 "variables": variables
             })
-            
+
             if "errors" in response:
                 raise APIError(f"Failed to set secrets: {response['errors']}")
-            
+
             self.logger.info(f"Successfully set {len(secrets)} secrets for app: {app_name}")
             return True
-            
+
         except Exception as e:
             self.logger.error(f"Failed to set secrets: {e}")
             return False
-    
+
     @performance_monitor("flyio_delete_app")
     async def delete_app(self, app_name: str) -> bool:
         """Delete application."""
         try:
             headers = await self._get_auth_headers()
             self._session.headers.update(headers)
-            
+
             # GraphQL mutation to delete app
             mutation = """
             mutation($input: DeleteAppInput!) {
@@ -747,24 +749,24 @@ class FlyioAdapter(BaseAdapter):
                 }
             }
             """
-            
+
             variables = {
                 "input": {
                     "appId": app_name
                 }
             }
-            
+
             response = await self.post_json("", {
                 "query": mutation,
                 "variables": variables
             })
-            
+
             if "errors" in response:
                 raise APIError(f"Failed to delete app: {response['errors']}")
-            
+
             self.logger.info(f"Successfully deleted app: {app_name}")
             return True
-            
+
         except Exception as e:
             self.logger.error(f"Failed to delete app: {e}")
             return False
@@ -773,7 +775,7 @@ class FlyioAdapter(BaseAdapter):
 def create_flyio_adapter() -> FlyioAdapter:
     """Factory function to create Fly.io adapter with environment configuration."""
     settings = get_settings()
-    
+
     config = FlyioConfig(
         base_url="",  # Will be set by adapter
         api_token=settings.FLYIO_API_TOKEN,
@@ -791,5 +793,5 @@ def create_flyio_adapter() -> FlyioAdapter:
         health_check_timeout_seconds=settings.FLYIO_HEALTH_CHECK_TIMEOUT_SECONDS,
         scale_timeout_seconds=settings.FLYIO_SCALE_TIMEOUT_SECONDS
     )
-    
+
     return FlyioAdapter(config)

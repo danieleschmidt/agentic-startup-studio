@@ -1,0 +1,30 @@
+{
+  "security_scan": {
+    "total_issues": 41,
+    "high_severity": 4,
+    "medium_severity": 15,
+    "low_severity": 22,
+    "security_score": 0,
+    "lines_of_code": 27466,
+    "pass": false
+  },
+  "code_quality": {
+    "total_issues": 1180,
+    "critical_issues": 24,
+    "code_quality_issues": 580,
+    "style_issues": 576,
+    "quality_score": 66.2,
+    "pass": false
+  },
+  "dependency_security": {
+    "vulnerabilities_found": 0,
+    "vulnerable_dependencies": [],
+    "pass": true
+  },
+  "test_coverage": {
+    "model_coverage": 90.0,
+    "overall_estimated_coverage": 75.0,
+    "pass": true
+  },
+  "timestamp": "2025-08-07T12:45:29.164630"
+}

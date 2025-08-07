@@ -8,6 +8,7 @@ Kept for backward compatibility during transition period.
 """
 
 import warnings
+
 from fastapi import FastAPI, Response
 from prometheus_client import CONTENT_TYPE_LATEST, Gauge, generate_latest
 
@@ -56,10 +57,11 @@ async def metrics() -> Response:
 
 if __name__ == "__main__":
     import os
+
     import uvicorn
 
     # Secure host binding - use environment variable or default to localhost
     host = os.getenv("HOST_INTERFACE", "127.0.0.1")
     port = int(os.getenv("PORT", "8000"))
-    
+
     uvicorn.run(app, host=host, port=port)

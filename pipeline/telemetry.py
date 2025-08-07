@@ -3,7 +3,6 @@ from __future__ import annotations
 
 import os
 import time
-from typing import Optional
 
 from fastapi import FastAPI, Request
 from opentelemetry import trace
@@ -12,8 +11,12 @@ from opentelemetry.instrumentation.fastapi import FastAPIInstrumentor
 from opentelemetry.sdk.resources import SERVICE_NAME, Resource
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import BatchSpanProcessor
-from prometheus_client import Counter, Histogram, Gauge, generate_latest, CONTENT_TYPE_LATEST
-
+from prometheus_client import (
+    Counter,
+    Gauge,
+    Histogram,
+    generate_latest,
+)
 
 # Prometheus metrics
 REQUEST_COUNT = Counter('http_requests_total', 'Total HTTP requests', ['method', 'endpoint', 'status'])
@@ -41,40 +44,40 @@ def init_tracing(app: FastAPI, service_name: str = "startup-studio-api") -> None
 
 def setup_metrics(app: FastAPI) -> None:
     """Set up Prometheus metrics collection for FastAPI app."""
-    
+
     @app.middleware("http")
     async def metrics_middleware(request: Request, call_next):
         start_time = time.time()
-        
+
         # Increment active connections
         ACTIVE_CONNECTIONS.inc()
-        
+
         try:
             response = await call_next(request)
-            
+
             # Record request metrics
             method = request.method
             endpoint = request.url.path
             status = response.status_code
-            
+
             REQUEST_COUNT.labels(method=method, endpoint=endpoint, status=status).inc()
             REQUEST_DURATION.labels(method=method, endpoint=endpoint).observe(time.time() - start_time)
-            
+
             return response
-            
+
         except Exception as e:
             ERROR_COUNT.labels(stage="http", error_type=type(e).__name__).inc()
             raise
         finally:
             ACTIVE_CONNECTIONS.dec()
-    
+
     @app.get("/metrics")
     async def metrics_endpoint():
         """Expose Prometheus metrics."""
         return generate_latest()
 
 
-def record_pipeline_metrics(stage: str, processing_time: float, queue_size: Optional[int] = None) -> None:
+def record_pipeline_metrics(stage: str, processing_time: float, queue_size: int | None = None) -> None:
     """Record pipeline-specific metrics."""
     PROCESSING_TIME.labels(stage=stage).observe(processing_time)
     if queue_size is not None:

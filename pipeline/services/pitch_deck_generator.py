@@ -18,7 +18,7 @@ from langchain_core.messages import SystemMessage
 from langchain_openai import ChatOpenAI
 
 # LangGraph v0.5+ uses StateGraph instead of Graph
-from langgraph.graph import StateGraph, END, START
+from langgraph.graph import END, START, StateGraph
 
 from pipeline.config.settings import get_settings
 from pipeline.services.budget_sentinel import (
@@ -205,7 +205,7 @@ class PitchDeckGenerator:
     def _build_workflow(self) -> StateGraph:
         """Build LangGraph workflow for pitch deck generation."""
         from typing_extensions import TypedDict
-        
+
         class PitchDeckState(TypedDict):
             idea: object
             investor_type: str
@@ -213,7 +213,7 @@ class PitchDeckGenerator:
             current_slide: dict
             quality_score: float
             metadata: dict
-        
+
         workflow = StateGraph(PitchDeckState)
 
         # Define workflow nodes
