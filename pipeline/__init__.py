@@ -20,7 +20,7 @@ __author__ = "Agentic Startup Studio"
 # Package metadata
 __all__ = [
     "models",
-    "config", 
+    "config",
     "ingestion",
     "storage",
     "cli"

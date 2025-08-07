@@ -7,11 +7,11 @@ for high-performance pipeline execution.
 
 import asyncio
 import logging
+from concurrent.futures import ThreadPoolExecutor
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from datetime import datetime, timedelta
-from typing import Any, Dict, List, Optional, Union
-from concurrent.futures import ThreadPoolExecutor
+from datetime import datetime
+from typing import Any
 
 try:
     import asyncpg
@@ -46,22 +46,22 @@ class PoolStats:
 
 class ConnectionPoolManager:
     """High-performance database connection pool manager."""
-    
+
     def __init__(self):
         self.settings = get_settings()
         self.logger = logging.getLogger(__name__)
-        
+
         # Async connection pool (preferred)
-        self.async_pool: Optional[asyncpg.Pool] = None
+        self.async_pool: asyncpg.Pool | None = None
         self.async_pool_available = False
-        
+
         # Sync connection pool (fallback)
-        self.sync_pool: Optional[pool.ThreadedConnectionPool] = None
+        self.sync_pool: pool.ThreadedConnectionPool | None = None
         self.sync_pool_available = False
-        
+
         # Thread pool for sync operations
         self.thread_pool = ThreadPoolExecutor(max_workers=10)
-        
+
         # Statistics
         self.stats = {
             'total_queries': 0,
@@ -69,30 +69,30 @@ class ConnectionPoolManager:
             'query_times': [],
             'created_at': datetime.utcnow()
         }
-        
+
         # Configuration
         self.min_connections = getattr(self.settings, 'db_min_connections', 5)
         self.max_connections = getattr(self.settings, 'db_max_connections', 20)
         self.command_timeout = getattr(self.settings, 'db_command_timeout', 30)
-    
+
     async def initialize(self):
         """Initialize connection pools."""
         # Try async pool first (best performance)
         if ASYNCPG_AVAILABLE:
             await self._init_async_pool()
-        
+
         # Fallback to sync pool
         if not self.async_pool_available and PSYCOPG2_AVAILABLE:
             await self._init_sync_pool()
-        
+
         if not self.async_pool_available and not self.sync_pool_available:
             raise RuntimeError("No database connection libraries available")
-    
+
     async def _init_async_pool(self):
         """Initialize asyncpg connection pool."""
         try:
             database_url = self._get_database_url()
-            
+
             self.async_pool = await asyncpg.create_pool(
                 database_url,
                 min_size=self.min_connections,
@@ -103,32 +103,32 @@ class ConnectionPoolManager:
                     'timezone': 'UTC'
                 }
             )
-            
+
             # Test the pool
             async with self.async_pool.acquire() as conn:
                 await conn.execute('SELECT 1')
-            
+
             self.async_pool_available = True
             self.logger.info(f"AsyncPG pool initialized: {self.min_connections}-{self.max_connections} connections")
-            
+
         except Exception as e:
             self.logger.warning(f"Failed to initialize AsyncPG pool: {e}")
             if self.async_pool:
                 await self.async_pool.close()
                 self.async_pool = None
-    
+
     async def _init_sync_pool(self):
         """Initialize psycopg2 connection pool."""
         try:
             database_url = self._get_database_url()
-            
+
             # Create threaded connection pool
             self.sync_pool = pool.ThreadedConnectionPool(
                 self.min_connections,
                 self.max_connections,
                 database_url
             )
-            
+
             # Test the pool
             conn = self.sync_pool.getconn()
             try:
@@ -137,33 +137,32 @@ class ConnectionPoolManager:
                 cursor.close()
             finally:
                 self.sync_pool.putconn(conn)
-            
+
             self.sync_pool_available = True
             self.logger.info(f"Psycopg2 pool initialized: {self.min_connections}-{self.max_connections} connections")
-            
+
         except Exception as e:
             self.logger.warning(f"Failed to initialize psycopg2 pool: {e}")
             if self.sync_pool:
                 self.sync_pool.closeall()
                 self.sync_pool = None
-    
+
     def _get_database_url(self) -> str:
         """Get database URL from settings."""
         if hasattr(self.settings, 'database_url') and self.settings.database_url:
             return self.settings.database_url
-        
+
         # Build URL from components
         host = getattr(self.settings, 'db_host', 'localhost')
         port = getattr(self.settings, 'db_port', 5432)
         database = getattr(self.settings, 'db_database', 'startup_studio')
         username = getattr(self.settings, 'db_username', 'postgres')
         password = getattr(self.settings, 'db_password', '')
-        
+
         if password:
             return f"postgresql://{username}:{password}@{host}:{port}/{database}"
-        else:
-            return f"postgresql://{username}@{host}:{port}/{database}"
-    
+        return f"postgresql://{username}@{host}:{port}/{database}"
+
     @asynccontextmanager
     async def get_connection(self):
         """Get database connection from pool."""
@@ -183,11 +182,11 @@ class ConnectionPoolManager:
                 )
         else:
             raise RuntimeError("No database connection pools available")
-    
-    async def execute_query(self, query: str, params: Optional[List] = None) -> List[Dict[str, Any]]:
+
+    async def execute_query(self, query: str, params: list | None = None) -> list[dict[str, Any]]:
         """Execute a single query and return results."""
         start_time = datetime.utcnow()
-        
+
         try:
             async with self.get_connection() as conn:
                 if self.async_pool_available:
@@ -196,7 +195,7 @@ class ConnectionPoolManager:
                         rows = await conn.fetch(query, *params)
                     else:
                         rows = await conn.fetch(query)
-                    
+
                     # Convert to dict format
                     results = [dict(row) for row in rows]
                 else:
@@ -207,39 +206,39 @@ class ConnectionPoolManager:
                             cursor.execute(query, params)
                         else:
                             cursor.execute(query)
-                        
+
                         if cursor.description:
                             columns = [desc[0] for desc in cursor.description]
                             rows = cursor.fetchall()
-                            results = [dict(zip(columns, row)) for row in rows]
+                            results = [dict(zip(columns, row, strict=False)) for row in rows]
                         else:
                             results = []
                     finally:
                         cursor.close()
-            
+
             # Update statistics
             query_time = (datetime.utcnow() - start_time).total_seconds()
             self.stats['total_queries'] += 1
             self.stats['query_times'].append(query_time)
-            
+
             # Keep only last 1000 query times for average calculation
             if len(self.stats['query_times']) > 1000:
                 self.stats['query_times'] = self.stats['query_times'][-1000:]
-            
+
             return results
-            
+
         except Exception as e:
             self.stats['failed_queries'] += 1
             self.logger.error(f"Query execution failed: {e}")
             raise
-    
-    async def execute_batch(self, queries: List[tuple]) -> List[List[Dict[str, Any]]]:
+
+    async def execute_batch(self, queries: list[tuple]) -> list[list[dict[str, Any]]]:
         """Execute multiple queries in batch for better performance."""
         if not queries:
             return []
-        
+
         results = []
-        
+
         async with self.get_connection() as conn:
             if self.async_pool_available:
                 # Use asyncpg batch execution
@@ -259,24 +258,24 @@ class ConnectionPoolManager:
                             cursor.execute(query, params)
                         else:
                             cursor.execute(query)
-                        
+
                         if cursor.description:
                             columns = [desc[0] for desc in cursor.description]
                             rows = cursor.fetchall()
-                            results.append([dict(zip(columns, row)) for row in rows])
+                            results.append([dict(zip(columns, row, strict=False)) for row in rows])
                         else:
                             results.append([])
-                    
+
                     conn.commit()
                 finally:
                     cursor.close()
-        
+
         # Update statistics
         self.stats['total_queries'] += len(queries)
-        
+
         return results
-    
-    async def execute_transaction(self, operations: List[tuple]) -> bool:
+
+    async def execute_transaction(self, operations: list[tuple]) -> bool:
         """Execute multiple operations in a single transaction."""
         try:
             async with self.get_connection() as conn:
@@ -301,15 +300,15 @@ class ConnectionPoolManager:
                         raise
                     finally:
                         cursor.close()
-            
+
             self.stats['total_queries'] += len(operations)
             return True
-            
+
         except Exception as e:
             self.stats['failed_queries'] += len(operations)
             self.logger.error(f"Transaction failed: {e}")
             raise
-    
+
     async def get_pool_stats(self) -> PoolStats:
         """Get connection pool statistics."""
         if self.async_pool_available and self.async_pool:
@@ -322,7 +321,7 @@ class ConnectionPoolManager:
                 failed_queries=self.stats['failed_queries'],
                 avg_query_time=sum(self.stats['query_times']) / len(self.stats['query_times']) if self.stats['query_times'] else 0.0
             )
-        elif self.sync_pool_available and self.sync_pool:
+        if self.sync_pool_available and self.sync_pool:
             # psycopg2 doesn't provide as detailed stats
             return PoolStats(
                 total_connections=self.max_connections,
@@ -333,24 +332,23 @@ class ConnectionPoolManager:
                 failed_queries=self.stats['failed_queries'],
                 avg_query_time=sum(self.stats['query_times']) / len(self.stats['query_times']) if self.stats['query_times'] else 0.0
             )
-        else:
-            return PoolStats(
-                total_connections=0,
-                active_connections=0,
-                idle_connections=0,
-                created_at=self.stats['created_at'],
-                total_queries=self.stats['total_queries'],
-                failed_queries=self.stats['failed_queries'],
-                avg_query_time=0.0
-            )
-    
-    async def execute_many(self, queries: List[tuple]) -> None:
+        return PoolStats(
+            total_connections=0,
+            active_connections=0,
+            idle_connections=0,
+            created_at=self.stats['created_at'],
+            total_queries=self.stats['total_queries'],
+            failed_queries=self.stats['failed_queries'],
+            avg_query_time=0.0
+        )
+
+    async def execute_many(self, queries: list[tuple]) -> None:
         """Execute multiple queries efficiently."""
         if not queries:
             return
-        
+
         start_time = datetime.utcnow()
-        
+
         try:
             async with self.get_connection() as conn:
                 if self.async_pool_available:
@@ -373,17 +371,17 @@ class ConnectionPoolManager:
                         conn.commit()
                     finally:
                         cursor.close()
-            
+
             # Update statistics
             query_time = (datetime.utcnow() - start_time).total_seconds()
             self.stats['total_queries'] += len(queries)
             self.stats['query_times'].append(query_time)
-            
+
         except Exception as e:
             self.stats['failed_queries'] += len(queries)
             self.logger.error(f"Batch execution failed: {e}")
             raise
-    
+
     async def health_check(self) -> bool:
         """Check if the connection pool is healthy."""
         try:
@@ -397,12 +395,12 @@ class ConnectionPoolManager:
                         result = cursor.fetchone()[0]
                     finally:
                         cursor.close()
-                
+
                 return result == 1
         except Exception as e:
             self.logger.error(f"Health check failed: {e}")
             return False
-    
+
     def reset_stats(self) -> None:
         """Reset connection pool statistics."""
         self.stats = {
@@ -412,90 +410,90 @@ class ConnectionPoolManager:
             'created_at': datetime.utcnow()
         }
         self.logger.info("Connection pool statistics reset")
-    
+
     async def close(self):
         """Close all connections and cleanup."""
         if self.async_pool:
             await self.async_pool.close()
             self.async_pool = None
             self.async_pool_available = False
-        
+
         if self.sync_pool:
             self.sync_pool.closeall()
             self.sync_pool = None
             self.sync_pool_available = False
-        
+
         self.thread_pool.shutdown(wait=True)
-        
+
         self.logger.info("Connection pools closed")
 
 
 # Batch processing utilities
 class BatchProcessor:
     """Utility for batching database operations."""
-    
+
     def __init__(self, pool_manager: ConnectionPoolManager, batch_size: int = 100):
         self.pool_manager = pool_manager
         self.batch_size = batch_size
         self.logger = logging.getLogger(__name__)
-    
-    async def batch_insert(self, table: str, records: List[Dict[str, Any]]) -> int:
+
+    async def batch_insert(self, table: str, records: list[dict[str, Any]]) -> int:
         """Batch insert records into table."""
         if not records:
             return 0
-        
+
         # Split into batches
         batches = [records[i:i + self.batch_size] for i in range(0, len(records), self.batch_size)]
         total_inserted = 0
-        
+
         for batch in batches:
             # Build insert query
             columns = list(batch[0].keys())
             placeholders = ', '.join(['%s'] * len(columns))
             query = f"INSERT INTO {table} ({', '.join(columns)}) VALUES ({placeholders})"
-            
+
             # Prepare batch operations
             operations = []
             for record in batch:
                 values = [record[col] for col in columns]
                 operations.append((query, values))
-            
+
             # Execute batch
             await self.pool_manager.execute_transaction(operations)
             total_inserted += len(batch)
-            
+
             self.logger.debug(f"Inserted batch of {len(batch)} records into {table}")
-        
+
         return total_inserted
-    
-    async def batch_update(self, table: str, updates: List[Dict[str, Any]], key_column: str) -> int:
+
+    async def batch_update(self, table: str, updates: list[dict[str, Any]], key_column: str) -> int:
         """Batch update records in table."""
         if not updates:
             return 0
-        
+
         batches = [updates[i:i + self.batch_size] for i in range(0, len(updates), self.batch_size)]
         total_updated = 0
-        
+
         for batch in batches:
             operations = []
-            
+
             for record in batch:
                 # Build update query
                 key_value = record[key_column]
                 update_columns = [col for col in record.keys() if col != key_column]
-                
+
                 set_clause = ', '.join([f"{col} = %s" for col in update_columns])
                 query = f"UPDATE {table} SET {set_clause} WHERE {key_column} = %s"
-                
+
                 values = [record[col] for col in update_columns] + [key_value]
                 operations.append((query, values))
-            
+
             # Execute batch
             await self.pool_manager.execute_transaction(operations)
             total_updated += len(batch)
-            
+
             self.logger.debug(f"Updated batch of {len(batch)} records in {table}")
-        
+
         return total_updated
 
 

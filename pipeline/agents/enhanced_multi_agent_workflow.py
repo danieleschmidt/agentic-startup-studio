@@ -5,16 +5,15 @@ Combines CrewAI's agent orchestration with LangGraph's state management
 for complex multi-agent workflows in startup validation and generation.
 """
 
-import asyncio
 import logging
+from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, TypedDict, Union
-from dataclasses import dataclass, field
+from typing import Any, TypedDict
 from uuid import uuid4
 
 try:
-    from crewai import Agent, Task, Crew, Process
+    from crewai import Agent, Crew, Process, Task
     from crewai.agent import Agent as CrewAIAgent
     from crewai.task import Task as CrewAITask
     CREWAI_AVAILABLE = True
@@ -24,15 +23,15 @@ except ImportError:
 
 try:
     from langgraph.checkpoint.memory import MemorySaver
-    from langgraph.graph import END, StateGraph, START
+    from langgraph.graph import END, START, StateGraph
     LANGGRAPH_AVAILABLE = True
 except ImportError:
     LANGGRAPH_AVAILABLE = False
     StateGraph = END = START = None
 
 try:
+    from langchain.schema import AIMessage, BaseMessage, HumanMessage
     from langchain_openai import ChatOpenAI
-    from langchain.schema import BaseMessage, HumanMessage, AIMessage
     LANGCHAIN_AVAILABLE = True
 except ImportError:
     LANGCHAIN_AVAILABLE = False
@@ -40,7 +39,7 @@ except ImportError:
 
 from pipeline.config.settings import get_settings
 from pipeline.core.service_registry import ServiceInterface
-from pipeline.services.budget_sentinel import get_budget_sentinel, BudgetCategory
+from pipeline.services.budget_sentinel import BudgetCategory, get_budget_sentinel
 
 
 class AgentRole(Enum):
@@ -82,8 +81,8 @@ class AgentConfig:
     name: str
     goal: str
     backstory: str
-    skills: List[str] = field(default_factory=list)
-    tools: List[str] = field(default_factory=list)
+    skills: list[str] = field(default_factory=list)
+    tools: list[str] = field(default_factory=list)
     memory_type: str = "vector"
     max_iterations: int = 3
     temperature: float = 0.7
@@ -99,65 +98,65 @@ class TaskConfig:
     agent_role: AgentRole
     stage: WorkflowStage
     priority: TaskPriority
-    dependencies: List[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     expected_output: str = ""
     max_execution_time: int = 300  # seconds
     retry_count: int = 2
-    validation_criteria: Dict[str, Any] = field(default_factory=dict)
+    validation_criteria: dict[str, Any] = field(default_factory=dict)
 
 
 class MultiAgentState(TypedDict):
     """LangGraph state for multi-agent workflow."""
-    
+
     # Core workflow state
     workflow_id: str
     current_stage: WorkflowStage
     startup_idea: str
     progress: float
     started_at: datetime
-    
+
     # Agent outputs by stage
-    ideation_results: Dict[str, Any]
-    technical_validation: Dict[str, Any]
-    market_analysis: Dict[str, Any]
-    business_model: Dict[str, Any]
-    investor_pitch: Dict[str, Any]
-    technical_architecture: Dict[str, Any]
-    go_to_market: Dict[str, Any]
-    final_review: Dict[str, Any]
-    
+    ideation_results: dict[str, Any]
+    technical_validation: dict[str, Any]
+    market_analysis: dict[str, Any]
+    business_model: dict[str, Any]
+    investor_pitch: dict[str, Any]
+    technical_architecture: dict[str, Any]
+    go_to_market: dict[str, Any]
+    final_review: dict[str, Any]
+
     # Task tracking
-    completed_tasks: List[str]
-    failed_tasks: List[str]
-    active_tasks: List[str]
-    
+    completed_tasks: list[str]
+    failed_tasks: list[str]
+    active_tasks: list[str]
+
     # Quality metrics
     consensus_score: float
     technical_feasibility: float
     market_viability: float
     business_potential: float
-    
+
     # Agent interactions
-    agent_messages: List[Dict[str, Any]]
-    debates: List[Dict[str, Any]]
-    decisions: List[Dict[str, Any]]
-    
+    agent_messages: list[dict[str, Any]]
+    debates: list[dict[str, Any]]
+    decisions: list[dict[str, Any]]
+
     # Error handling
-    errors: List[str]
+    errors: list[str]
     retry_count: int
-    
+
     # Metadata
-    metadata: Dict[str, Any]
+    metadata: dict[str, Any]
 
 
 class EnhancedMultiAgentWorkflow(ServiceInterface):
     """Enhanced multi-agent workflow system combining CrewAI and LangGraph."""
-    
+
     def __init__(self):
         self.settings = get_settings()
         self.logger = logging.getLogger(__name__)
         self.budget_sentinel = get_budget_sentinel()
-        
+
         # Check dependencies
         if not CREWAI_AVAILABLE:
             raise ImportError("CrewAI is required for multi-agent workflows")
@@ -165,17 +164,17 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
             raise ImportError("LangGraph is required for state management")
         if not LANGCHAIN_AVAILABLE:
             raise ImportError("LangChain is required for LLM integration")
-        
+
         # Initialize components
         self.llm = self._initialize_llm()
-        self.agents: Dict[AgentRole, Agent] = {}
-        self.agent_configs: Dict[AgentRole, AgentConfig] = {}
-        self.task_configs: List[TaskConfig] = []
-        
+        self.agents: dict[AgentRole, Agent] = {}
+        self.agent_configs: dict[AgentRole, AgentConfig] = {}
+        self.task_configs: list[TaskConfig] = []
+
         # LangGraph components
         self.checkpointer = MemorySaver()
         self.graph = None
-        
+
         # Workflow statistics
         self.stats = {
             'workflows_executed': 0,
@@ -183,47 +182,46 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
             'average_consensus_score': 0.0,
             'average_execution_time': 0.0
         }
-    
+
     async def initialize(self) -> None:
         """Initialize the multi-agent workflow system."""
         # Load agent configurations
         await self._load_agent_configurations()
-        
+
         # Create agents
         await self._create_agents()
-        
+
         # Define task configurations
         await self._define_task_configurations()
-        
+
         # Build LangGraph workflow
         self._build_workflow_graph()
-        
+
         self.logger.info("Enhanced multi-agent workflow system initialized")
-    
+
     async def shutdown(self) -> None:
         """Shutdown the workflow system."""
         # Cleanup any active workflows
         self.logger.info("Multi-agent workflow system shutdown")
-    
+
     def _initialize_llm(self) -> Any:
         """Initialize the language model."""
         api_key = getattr(self.settings, 'openai_api_key', None)
         if not api_key:
             raise ValueError("OpenAI API key is required for multi-agent workflows")
-        
+
         return ChatOpenAI(
             model=getattr(self.settings, 'default_llm_model', 'gpt-4o'),
             temperature=0.7,
             api_key=api_key
         )
-    
+
     async def _load_agent_configurations(self) -> None:
         """Load agent configurations from YAML files."""
-        import yaml
         from pathlib import Path
-        
+
         agents_dir = Path(__file__).parent.parent.parent / "agents"
-        
+
         # Default configurations for each role
         default_configs = {
             AgentRole.CEO: AgentConfig(
@@ -267,9 +265,9 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
                 tools=["financial_modeling", "market_research"]
             )
         }
-        
+
         self.agent_configs = default_configs
-    
+
     async def _create_agents(self) -> None:
         """Create CrewAI agents from configurations."""
         for role, config in self.agent_configs.items():
@@ -282,10 +280,10 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
                 allow_delegation=config.delegation_allowed,
                 max_iter=config.max_iterations
             )
-            
+
             self.agents[role] = agent
             self.logger.debug(f"Created agent: {config.name} ({role.value})")
-    
+
     async def _define_task_configurations(self) -> None:
         """Define task configurations for the workflow."""
         self.task_configs = [
@@ -307,7 +305,7 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
                 dependencies=["ideation_ceo"],
                 expected_output="Technical feasibility assessment for each concept"
             ),
-            
+
             # Technical Validation Stage
             TaskConfig(
                 task_id="technical_architecture",
@@ -325,7 +323,7 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
                 priority=TaskPriority.HIGH,
                 expected_output="Research validation report with technical benchmarks"
             ),
-            
+
             # Market Analysis Stage
             TaskConfig(
                 task_id="market_sizing",
@@ -343,7 +341,7 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
                 priority=TaskPriority.HIGH,
                 expected_output="Competitive analysis with positioning recommendations"
             ),
-            
+
             # Business Model Stage
             TaskConfig(
                 task_id="business_model_design",
@@ -353,7 +351,7 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
                 priority=TaskPriority.CRITICAL,
                 expected_output="Business model canvas with revenue projections"
             ),
-            
+
             # Go-to-Market Stage
             TaskConfig(
                 task_id="gtm_strategy",
@@ -363,7 +361,7 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
                 priority=TaskPriority.CRITICAL,
                 expected_output="Go-to-market plan with customer acquisition strategy"
             ),
-            
+
             # Final Review Stage
             TaskConfig(
                 task_id="investment_evaluation",
@@ -374,14 +372,14 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
                 expected_output="Investment recommendation with risk analysis"
             )
         ]
-    
+
     def _build_workflow_graph(self) -> None:
         """Build the LangGraph workflow state machine."""
         if not LANGGRAPH_AVAILABLE:
             return
-        
+
         graph = StateGraph(MultiAgentState)
-        
+
         # Add nodes for each workflow stage
         graph.add_node("ideation", self._ideation_node)
         graph.add_node("technical_validation", self._technical_validation_node)
@@ -391,17 +389,17 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
         graph.add_node("final_review", self._final_review_node)
         graph.add_node("consensus_check", self._consensus_check_node)
         graph.add_node("quality_gate", self._quality_gate_node)
-        
+
         # Define workflow edges
         graph.set_entry_point("ideation")
-        
+
         # Sequential flow with quality gates
         graph.add_edge("ideation", "technical_validation")
         graph.add_edge("technical_validation", "quality_gate")
         graph.add_edge("market_analysis", "quality_gate")
         graph.add_edge("business_model", "quality_gate")
         graph.add_edge("go_to_market", "quality_gate")
-        
+
         # Conditional routing from quality gate
         graph.add_conditional_edges(
             "quality_gate",
@@ -415,7 +413,7 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
                 "completed": END
             }
         )
-        
+
         # Consensus checking
         graph.add_conditional_edges(
             "consensus_check",
@@ -426,19 +424,19 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
                 "completed": END
             }
         )
-        
+
         graph.add_edge("final_review", END)
-        
+
         self.graph = graph.compile(checkpointer=self.checkpointer)
-    
+
     async def execute_workflow(
         self,
         startup_idea: str,
-        workflow_id: Optional[str] = None
+        workflow_id: str | None = None
     ) -> MultiAgentState:
         """Execute the complete multi-agent workflow."""
         workflow_id = workflow_id or f"workflow_{uuid4().hex[:8]}"
-        
+
         # Initialize workflow state
         initial_state: MultiAgentState = {
             "workflow_id": workflow_id,
@@ -468,7 +466,7 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
             "retry_count": 0,
             "metadata": {}
         }
-        
+
         try:
             # Track budget for workflow execution
             async with self.budget_sentinel.track_operation(
@@ -479,24 +477,24 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
             ):
                 config = {"configurable": {"thread_id": workflow_id}}
                 final_state = await self.graph.ainvoke(initial_state, config)
-                
+
                 # Update statistics
                 self.stats['workflows_executed'] += 1
                 self.stats['total_tasks_completed'] += len(final_state['completed_tasks'])
-                
+
                 return final_state
-                
+
         except Exception as e:
             self.logger.error(f"Multi-agent workflow execution failed: {e}")
             raise
-    
+
     async def _ideation_node(self, state: MultiAgentState) -> MultiAgentState:
         """Execute ideation stage with CEO and CTO collaboration."""
         self.logger.info(f"Starting ideation for workflow {state['workflow_id']}")
-        
+
         state["current_stage"] = WorkflowStage.IDEATION
         state["progress"] = 0.2
-        
+
         try:
             # CEO generates initial concepts
             ceo_task = Task(
@@ -504,14 +502,14 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
                 agent=self.agents[AgentRole.CEO],
                 expected_output="3 startup concepts with clear value propositions"
             )
-            
+
             # CTO evaluates technical feasibility
             cto_task = Task(
                 description="Evaluate technical feasibility of the generated concepts",
                 agent=self.agents[AgentRole.CTO],
                 expected_output="Technical feasibility assessment"
             )
-            
+
             # Create and execute crew
             ideation_crew = Crew(
                 agents=[self.agents[AgentRole.CEO], self.agents[AgentRole.CTO]],
@@ -519,31 +517,31 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
                 process=Process.sequential,
                 verbose=False
             )
-            
+
             result = ideation_crew.kickoff()
-            
+
             state["ideation_results"] = {
                 "concepts": result,
                 "timestamp": datetime.utcnow(),
                 "participants": ["CEO", "CTO"]
             }
-            
+
             state["completed_tasks"].append("ideation_ceo")
             state["completed_tasks"].append("ideation_cto_review")
-            
+
         except Exception as e:
             state["errors"].append(f"Ideation failed: {str(e)}")
             state["failed_tasks"].append("ideation")
-        
+
         return state
-    
+
     async def _technical_validation_node(self, state: MultiAgentState) -> MultiAgentState:
         """Execute technical validation stage."""
         self.logger.info(f"Starting technical validation for workflow {state['workflow_id']}")
-        
+
         state["current_stage"] = WorkflowStage.TECHNICAL_VALIDATION
         state["progress"] = 0.4
-        
+
         # Technical validation logic here
         state["technical_validation"] = {
             "architecture_designed": True,
@@ -551,19 +549,19 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
             "technology_stack": ["Python", "PostgreSQL", "React"],
             "timestamp": datetime.utcnow()
         }
-        
+
         state["technical_feasibility"] = 0.85
         state["completed_tasks"].append("technical_validation")
-        
+
         return state
-    
+
     async def _market_analysis_node(self, state: MultiAgentState) -> MultiAgentState:
         """Execute market analysis stage."""
         self.logger.info(f"Starting market analysis for workflow {state['workflow_id']}")
-        
+
         state["current_stage"] = WorkflowStage.MARKET_ANALYSIS
         state["progress"] = 0.6
-        
+
         # Market analysis logic here
         state["market_analysis"] = {
             "market_size": {"TAM": "$10B", "SAM": "$1B", "SOM": "$100M"},
@@ -571,19 +569,19 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
             "viability_score": 0.78,
             "timestamp": datetime.utcnow()
         }
-        
+
         state["market_viability"] = 0.78
         state["completed_tasks"].append("market_analysis")
-        
+
         return state
-    
+
     async def _business_model_node(self, state: MultiAgentState) -> MultiAgentState:
         """Execute business model design stage."""
         self.logger.info(f"Starting business model design for workflow {state['workflow_id']}")
-        
+
         state["current_stage"] = WorkflowStage.BUSINESS_MODEL
         state["progress"] = 0.8
-        
+
         # Business model logic here
         state["business_model"] = {
             "revenue_model": "SaaS subscription with freemium tier",
@@ -591,19 +589,19 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
             "business_score": 0.82,
             "timestamp": datetime.utcnow()
         }
-        
+
         state["business_potential"] = 0.82
         state["completed_tasks"].append("business_model")
-        
+
         return state
-    
+
     async def _go_to_market_node(self, state: MultiAgentState) -> MultiAgentState:
         """Execute go-to-market strategy stage."""
         self.logger.info(f"Starting go-to-market strategy for workflow {state['workflow_id']}")
-        
+
         state["current_stage"] = WorkflowStage.GO_TO_MARKET
         state["progress"] = 0.9
-        
+
         # GTM strategy logic here
         state["go_to_market"] = {
             "strategy": "Product-led growth with content marketing",
@@ -611,18 +609,18 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
             "timeline": "6-month rollout plan",
             "timestamp": datetime.utcnow()
         }
-        
+
         state["completed_tasks"].append("go_to_market")
-        
+
         return state
-    
+
     async def _final_review_node(self, state: MultiAgentState) -> MultiAgentState:
         """Execute final review and recommendation."""
         self.logger.info(f"Starting final review for workflow {state['workflow_id']}")
-        
+
         state["current_stage"] = WorkflowStage.FINAL_REVIEW
         state["progress"] = 1.0
-        
+
         # Calculate overall consensus score
         scores = [
             state["technical_feasibility"],
@@ -630,7 +628,7 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
             state["business_potential"]
         ]
         state["consensus_score"] = sum(scores) / len(scores)
-        
+
         state["final_review"] = {
             "recommendation": "PROCEED" if state["consensus_score"] > 0.7 else "REVISE",
             "overall_score": state["consensus_score"],
@@ -638,50 +636,48 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
             "areas_for_improvement": ["Competitive differentiation", "Go-to-market execution"],
             "timestamp": datetime.utcnow()
         }
-        
+
         state["completed_tasks"].append("final_review")
-        
+
         return state
-    
+
     async def _consensus_check_node(self, state: MultiAgentState) -> MultiAgentState:
         """Check for consensus among agents."""
         # Consensus checking logic
         if state["consensus_score"] < 0.6 and state["retry_count"] < 2:
             state["retry_count"] += 1
             return state
-        
+
         return state
-    
+
     async def _quality_gate_node(self, state: MultiAgentState) -> MultiAgentState:
         """Quality gate validation."""
         # Quality gate logic
         return state
-    
+
     def _route_from_quality_gate(self, state: MultiAgentState) -> str:
         """Route from quality gate based on current stage."""
         current_stage = state["current_stage"]
-        
+
         if current_stage == WorkflowStage.TECHNICAL_VALIDATION:
             return "market_analysis"
-        elif current_stage == WorkflowStage.MARKET_ANALYSIS:
+        if current_stage == WorkflowStage.MARKET_ANALYSIS:
             return "business_model"
-        elif current_stage == WorkflowStage.BUSINESS_MODEL:
+        if current_stage == WorkflowStage.BUSINESS_MODEL:
             return "go_to_market"
-        elif current_stage == WorkflowStage.GO_TO_MARKET:
+        if current_stage == WorkflowStage.GO_TO_MARKET:
             return "final_review"
-        else:
-            return "completed"
-    
+        return "completed"
+
     def _route_from_consensus(self, state: MultiAgentState) -> str:
         """Route from consensus check."""
         if state["consensus_score"] < 0.6 and state["retry_count"] < 2:
             return "retry"
-        elif state["consensus_score"] >= 0.6:
+        if state["consensus_score"] >= 0.6:
             return "final_review"
-        else:
-            return "completed"
-    
-    async def get_workflow_status(self, workflow_id: str) -> Dict[str, Any]:
+        return "completed"
+
+    async def get_workflow_status(self, workflow_id: str) -> dict[str, Any]:
         """Get status of a running workflow."""
         # Implementation for workflow status retrieval
         return {
@@ -690,8 +686,8 @@ class EnhancedMultiAgentWorkflow(ServiceInterface):
             "progress": 0.5,
             "current_stage": "market_analysis"
         }
-    
-    def get_service_info(self) -> Dict[str, Any]:
+
+    def get_service_info(self) -> dict[str, Any]:
         """Get service information."""
         return {
             "name": "EnhancedMultiAgentWorkflow",

@@ -12,21 +12,20 @@ Comprehensive compliance management for global privacy and data protection regul
 
 import json
 import logging
-import hashlib
-from datetime import datetime, timedelta
-from typing import Dict, List, Optional, Any, Set, Union
-from dataclasses import dataclass, field
-from enum import Enum
-from pathlib import Path
 import uuid
 from abc import ABC, abstractmethod
+from dataclasses import dataclass, field
+from datetime import datetime, timedelta
+from enum import Enum
+from pathlib import Path
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class ComplianceRegulation(str, Enum):
     """Supported privacy and data protection regulations."""
-    
+
     GDPR = "GDPR"           # General Data Protection Regulation (EU)
     CCPA = "CCPA"           # California Consumer Privacy Act (US/CA)
     PDPA_SG = "PDPA_SG"     # Personal Data Protection Act (Singapore)
@@ -38,7 +37,7 @@ class ComplianceRegulation(str, Enum):
 
 class DataCategory(str, Enum):
     """Categories of data for compliance classification."""
-    
+
     PERSONAL_IDENTIFIABLE = "personal_identifiable"    # PII data
     SENSITIVE_PERSONAL = "sensitive_personal"          # Special category data
     TECHNICAL_METADATA = "technical_metadata"          # System/technical data
@@ -50,7 +49,7 @@ class DataCategory(str, Enum):
 
 class ProcessingLawfulBasis(str, Enum):
     """Lawful bases for data processing under GDPR."""
-    
+
     CONSENT = "consent"                    # Article 6(1)(a) - Consent
     CONTRACT = "contract"                  # Article 6(1)(b) - Contract performance
     LEGAL_OBLIGATION = "legal_obligation"  # Article 6(1)(c) - Legal obligation
@@ -62,23 +61,23 @@ class ProcessingLawfulBasis(str, Enum):
 @dataclass
 class DataProcessingRecord:
     """Record of data processing activity for compliance."""
-    
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     timestamp: datetime = field(default_factory=datetime.utcnow)
     regulation: ComplianceRegulation = ComplianceRegulation.GDPR
-    data_subject_id: Optional[str] = None
+    data_subject_id: str | None = None
     data_category: DataCategory = DataCategory.TECHNICAL_METADATA
     processing_purpose: str = ""
     lawful_basis: ProcessingLawfulBasis = ProcessingLawfulBasis.LEGITIMATE_INTERESTS
     data_controller: str = "Quantum Task Planner System"
-    data_processor: Optional[str] = None
+    data_processor: str | None = None
     retention_period_days: int = 365
     geographic_location: str = "EU"
     anonymized: bool = False
     encrypted: bool = True
-    additional_metadata: Dict[str, Any] = field(default_factory=dict)
-    
-    def to_dict(self) -> Dict[str, Any]:
+    additional_metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "id": self.id,
@@ -101,36 +100,36 @@ class DataProcessingRecord:
 @dataclass
 class ConsentRecord:
     """Record of user consent for data processing."""
-    
+
     id: str = field(default_factory=lambda: str(uuid.uuid4()))
     data_subject_id: str = ""
     consent_timestamp: datetime = field(default_factory=datetime.utcnow)
     consent_version: str = "1.0"
-    processing_purposes: List[str] = field(default_factory=list)
-    data_categories: List[DataCategory] = field(default_factory=list)
+    processing_purposes: list[str] = field(default_factory=list)
+    data_categories: list[DataCategory] = field(default_factory=list)
     consent_method: str = "explicit"  # explicit, implicit, opt-in, opt-out
     consent_withdrawn: bool = False
-    withdrawal_timestamp: Optional[datetime] = None
-    expiry_date: Optional[datetime] = None
+    withdrawal_timestamp: datetime | None = None
+    expiry_date: datetime | None = None
     geographic_location: str = ""
     regulation: ComplianceRegulation = ComplianceRegulation.GDPR
-    
+
     def is_valid(self) -> bool:
         """Check if consent is currently valid."""
         if self.consent_withdrawn:
             return False
-        
+
         if self.expiry_date and datetime.utcnow() > self.expiry_date:
             return False
-        
+
         return True
-    
+
     def withdraw_consent(self):
         """Withdraw consent."""
         self.consent_withdrawn = True
         self.withdrawal_timestamp = datetime.utcnow()
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         return {
             "id": self.id,
@@ -150,12 +149,12 @@ class ConsentRecord:
 
 class ComplianceRule(ABC):
     """Abstract base class for compliance rules."""
-    
+
     @abstractmethod
     def check_compliance(self, processing_record: DataProcessingRecord) -> bool:
         """Check if processing record complies with this rule."""
         pass
-    
+
     @abstractmethod
     def get_violation_message(self) -> str:
         """Get violation message if compliance check fails."""
@@ -164,97 +163,97 @@ class ComplianceRule(ABC):
 
 class GDPRDataMinimizationRule(ComplianceRule):
     """GDPR Article 5(1)(c) - Data minimization principle."""
-    
+
     def check_compliance(self, processing_record: DataProcessingRecord) -> bool:
         """Check data minimization compliance."""
         # Check if processing purpose is clearly defined
         if not processing_record.processing_purpose.strip():
             return False
-        
+
         # Check if lawful basis is specified
         if not processing_record.lawful_basis:
             return False
-        
+
         # Sensitive data requires additional protections
         if processing_record.data_category == DataCategory.SENSITIVE_PERSONAL:
             return processing_record.encrypted and processing_record.lawful_basis in [
-                ProcessingLawfulBasis.CONSENT, 
+                ProcessingLawfulBasis.CONSENT,
                 ProcessingLawfulBasis.LEGAL_OBLIGATION
             ]
-        
+
         return True
-    
+
     def get_violation_message(self) -> str:
         return "GDPR Article 5(1)(c) violation: Data processing does not meet minimization requirements"
 
 
 class GDPRRetentionLimitRule(ComplianceRule):
     """GDPR Article 5(1)(e) - Storage limitation principle."""
-    
+
     def __init__(self, max_retention_days: int = 2555):  # ~7 years default
         self.max_retention_days = max_retention_days
-    
+
     def check_compliance(self, processing_record: DataProcessingRecord) -> bool:
         """Check retention period compliance."""
         return processing_record.retention_period_days <= self.max_retention_days
-    
+
     def get_violation_message(self) -> str:
         return f"GDPR Article 5(1)(e) violation: Retention period exceeds {self.max_retention_days} days"
 
 
 class CCPADataSaleRestictionRule(ComplianceRule):
     """CCPA Section 1798.120 - Right to opt-out of sale."""
-    
+
     def check_compliance(self, processing_record: DataProcessingRecord) -> bool:
         """Check CCPA data sale restrictions."""
         # For quantum task planner, we don't sell data, so this is always compliant
         return True
-    
+
     def get_violation_message(self) -> str:
         return "CCPA Section 1798.120 violation: Data sale without opt-out mechanism"
 
 
 class QuantumComplianceManager:
     """Main compliance management system for quantum task planner."""
-    
+
     def __init__(self, default_regulation: ComplianceRegulation = ComplianceRegulation.GDPR):
         self.default_regulation = default_regulation
-        self.processing_records: List[DataProcessingRecord] = []
-        self.consent_records: Dict[str, ConsentRecord] = {}
-        self.compliance_rules: Dict[ComplianceRegulation, List[ComplianceRule]] = {}
-        
+        self.processing_records: list[DataProcessingRecord] = []
+        self.consent_records: dict[str, ConsentRecord] = {}
+        self.compliance_rules: dict[ComplianceRegulation, list[ComplianceRule]] = {}
+
         # Initialize compliance rules
         self._initialize_compliance_rules()
-        
+
         # Audit log
-        self.audit_log: List[Dict[str, Any]] = []
-        
+        self.audit_log: list[dict[str, Any]] = []
+
     def _initialize_compliance_rules(self):
         """Initialize compliance rules for different regulations."""
-        
+
         # GDPR rules
         self.compliance_rules[ComplianceRegulation.GDPR] = [
             GDPRDataMinimizationRule(),
             GDPRRetentionLimitRule()
         ]
-        
+
         # CCPA rules
         self.compliance_rules[ComplianceRegulation.CCPA] = [
             CCPADataSaleRestictionRule()
         ]
-        
+
         # Other regulations would be added here
         for regulation in ComplianceRegulation:
             if regulation not in self.compliance_rules:
                 self.compliance_rules[regulation] = []
-    
-    def record_data_processing(self, 
-                             data_subject_id: Optional[str],
+
+    def record_data_processing(self,
+                             data_subject_id: str | None,
                              data_category: DataCategory,
                              processing_purpose: str,
                              lawful_basis: ProcessingLawfulBasis,
                              geographic_location: str = "EU",
-                             regulation: Optional[ComplianceRegulation] = None,
+                             regulation: ComplianceRegulation | None = None,
                              **kwargs) -> str:
         """
         Record a data processing activity.
@@ -272,7 +271,7 @@ class QuantumComplianceManager:
             Processing record ID
         """
         regulation = regulation or self.default_regulation
-        
+
         record = DataProcessingRecord(
             regulation=regulation,
             data_subject_id=data_subject_id,
@@ -282,29 +281,29 @@ class QuantumComplianceManager:
             geographic_location=geographic_location,
             additional_metadata=kwargs
         )
-        
+
         self.processing_records.append(record)
-        
+
         # Log the processing activity
         self._add_audit_log("data_processing_recorded", {
             "record_id": record.id,
             "data_category": data_category.value,
             "purpose": processing_purpose
         })
-        
+
         # Check compliance
         self._check_processing_compliance(record)
-        
+
         logger.info(f"Recorded data processing: {record.id}")
         return record.id
-    
+
     def record_consent(self,
                       data_subject_id: str,
-                      processing_purposes: List[str],
-                      data_categories: List[DataCategory],
+                      processing_purposes: list[str],
+                      data_categories: list[DataCategory],
                       consent_method: str = "explicit",
-                      regulation: Optional[ComplianceRegulation] = None,
-                      expiry_days: Optional[int] = None) -> str:
+                      regulation: ComplianceRegulation | None = None,
+                      expiry_days: int | None = None) -> str:
         """
         Record user consent for data processing.
         
@@ -320,11 +319,11 @@ class QuantumComplianceManager:
             Consent record ID
         """
         regulation = regulation or self.default_regulation
-        
+
         expiry_date = None
         if expiry_days:
             expiry_date = datetime.utcnow() + timedelta(days=expiry_days)
-        
+
         consent = ConsentRecord(
             data_subject_id=data_subject_id,
             processing_purposes=processing_purposes,
@@ -333,18 +332,18 @@ class QuantumComplianceManager:
             regulation=regulation,
             expiry_date=expiry_date
         )
-        
+
         self.consent_records[consent.id] = consent
-        
+
         self._add_audit_log("consent_recorded", {
             "consent_id": consent.id,
             "data_subject_id": data_subject_id,
             "purposes": processing_purposes
         })
-        
+
         logger.info(f"Recorded consent: {consent.id} for subject {data_subject_id}")
         return consent.id
-    
+
     def withdraw_consent(self, consent_id: str) -> bool:
         """
         Withdraw consent for data processing.
@@ -358,18 +357,18 @@ class QuantumComplianceManager:
         if consent_id in self.consent_records:
             consent = self.consent_records[consent_id]
             consent.withdraw_consent()
-            
+
             self._add_audit_log("consent_withdrawn", {
                 "consent_id": consent_id,
                 "data_subject_id": consent.data_subject_id
             })
-            
+
             logger.info(f"Consent withdrawn: {consent_id}")
             return True
-        
+
         return False
-    
-    def check_consent_validity(self, data_subject_id: str, 
+
+    def check_consent_validity(self, data_subject_id: str,
                              processing_purpose: str,
                              data_category: DataCategory) -> bool:
         """
@@ -389,26 +388,26 @@ class QuantumComplianceManager:
                 processing_purpose in consent.processing_purposes and
                 data_category in consent.data_categories):
                 return True
-        
+
         return False
-    
+
     def _check_processing_compliance(self, record: DataProcessingRecord):
         """Check processing record against compliance rules."""
         applicable_rules = self.compliance_rules.get(record.regulation, [])
-        
+
         for rule in applicable_rules:
             if not rule.check_compliance(record):
                 violation_message = rule.get_violation_message()
-                
+
                 self._add_audit_log("compliance_violation", {
                     "record_id": record.id,
                     "regulation": record.regulation.value,
                     "violation": violation_message
                 })
-                
+
                 logger.warning(f"Compliance violation: {violation_message}")
-    
-    def generate_data_subject_report(self, data_subject_id: str) -> Dict[str, Any]:
+
+    def generate_data_subject_report(self, data_subject_id: str) -> dict[str, Any]:
         """
         Generate data subject report (GDPR Article 15 - Right of access).
         
@@ -420,16 +419,16 @@ class QuantumComplianceManager:
         """
         # Find all processing records for this data subject
         subject_records = [
-            record for record in self.processing_records 
+            record for record in self.processing_records
             if record.data_subject_id == data_subject_id
         ]
-        
+
         # Find all consent records
         subject_consents = [
             consent for consent in self.consent_records.values()
             if consent.data_subject_id == data_subject_id
         ]
-        
+
         report = {
             "data_subject_id": data_subject_id,
             "report_generated": datetime.utcnow().isoformat(),
@@ -441,16 +440,16 @@ class QuantumComplianceManager:
                 record.id: record.retention_period_days for record in subject_records
             }
         }
-        
+
         self._add_audit_log("data_subject_report_generated", {
             "data_subject_id": data_subject_id,
             "records_count": len(subject_records)
         })
-        
+
         return report
-    
-    def initiate_data_deletion(self, data_subject_id: str, 
-                             reason: str = "Right to be forgotten") -> Dict[str, Any]:
+
+    def initiate_data_deletion(self, data_subject_id: str,
+                             reason: str = "Right to be forgotten") -> dict[str, Any]:
         """
         Initiate data deletion process (GDPR Article 17 - Right to erasure).
         
@@ -463,10 +462,10 @@ class QuantumComplianceManager:
         """
         # Find all data associated with subject
         subject_records = [
-            record for record in self.processing_records 
+            record for record in self.processing_records
             if record.data_subject_id == data_subject_id
         ]
-        
+
         deletion_report = {
             "data_subject_id": data_subject_id,
             "deletion_initiated": datetime.utcnow().isoformat(),
@@ -482,26 +481,26 @@ class QuantumComplianceManager:
                 for record in subject_records
             ]
         }
-        
+
         # In a real implementation, this would trigger actual data deletion
         # For now, we just mark records for deletion
         for record in subject_records:
             record.additional_metadata["marked_for_deletion"] = True
             record.additional_metadata["deletion_reason"] = reason
             record.additional_metadata["deletion_requested"] = datetime.utcnow().isoformat()
-        
+
         self._add_audit_log("data_deletion_initiated", {
             "data_subject_id": data_subject_id,
             "reason": reason,
             "records_count": len(subject_records)
         })
-        
+
         logger.info(f"Data deletion initiated for subject: {data_subject_id}")
         return deletion_report
-    
-    def generate_compliance_report(self, regulation: Optional[ComplianceRegulation] = None,
-                                 start_date: Optional[datetime] = None,
-                                 end_date: Optional[datetime] = None) -> Dict[str, Any]:
+
+    def generate_compliance_report(self, regulation: ComplianceRegulation | None = None,
+                                 start_date: datetime | None = None,
+                                 end_date: datetime | None = None) -> dict[str, Any]:
         """
         Generate compliance report for audit purposes.
         
@@ -515,39 +514,39 @@ class QuantumComplianceManager:
         """
         end_date = end_date or datetime.utcnow()
         start_date = start_date or (end_date - timedelta(days=30))
-        
+
         # Filter records by date range
         period_records = [
             record for record in self.processing_records
             if start_date <= record.timestamp <= end_date
         ]
-        
+
         # Filter by regulation if specified
         if regulation:
             period_records = [
                 record for record in period_records
                 if record.regulation == regulation
             ]
-        
+
         # Generate statistics
         data_categories = {}
         processing_purposes = {}
         lawful_bases = {}
         geographic_locations = {}
-        
+
         for record in period_records:
             data_categories[record.data_category.value] = data_categories.get(record.data_category.value, 0) + 1
             processing_purposes[record.processing_purpose] = processing_purposes.get(record.processing_purpose, 0) + 1
             lawful_bases[record.lawful_basis.value] = lawful_bases.get(record.lawful_basis.value, 0) + 1
             geographic_locations[record.geographic_location] = geographic_locations.get(record.geographic_location, 0) + 1
-        
+
         # Count violations
         violations = [
             log for log in self.audit_log
             if (log.get("action") == "compliance_violation" and
                 start_date <= datetime.fromisoformat(log["timestamp"]) <= end_date)
         ]
-        
+
         report = {
             "report_period": {
                 "start_date": start_date.isoformat(),
@@ -556,7 +555,7 @@ class QuantumComplianceManager:
             "regulation": regulation.value if regulation else "all",
             "summary": {
                 "total_processing_records": len(period_records),
-                "total_consent_records": len([c for c in self.consent_records.values() 
+                "total_consent_records": len([c for c in self.consent_records.values()
                                             if start_date <= c.consent_timestamp <= end_date]),
                 "total_violations": len(violations),
                 "data_categories_processed": len(data_categories),
@@ -572,17 +571,17 @@ class QuantumComplianceManager:
             "compliance_score": max(0, 100 - (len(violations) * 10)),  # Simple scoring
             "generated_timestamp": datetime.utcnow().isoformat()
         }
-        
+
         self._add_audit_log("compliance_report_generated", {
             "regulation": regulation.value if regulation else "all",
             "period_start": start_date.isoformat(),
             "period_end": end_date.isoformat(),
             "records_count": len(period_records)
         })
-        
+
         return report
-    
-    def get_privacy_policy_text(self, regulation: ComplianceRegulation) -> Dict[str, str]:
+
+    def get_privacy_policy_text(self, regulation: ComplianceRegulation) -> dict[str, str]:
         """
         Get privacy policy text for specific regulation.
         
@@ -612,10 +611,10 @@ class QuantumComplianceManager:
                 "contact": "Contact us to exercise your privacy rights under CCPA."
             }
         }
-        
+
         return policies.get(regulation, policies[ComplianceRegulation.GDPR])
-    
-    def _add_audit_log(self, action: str, details: Dict[str, Any]):
+
+    def _add_audit_log(self, action: str, details: dict[str, Any]):
         """Add entry to audit log."""
         log_entry = {
             "id": str(uuid.uuid4()),
@@ -623,15 +622,15 @@ class QuantumComplianceManager:
             "action": action,
             "details": details
         }
-        
+
         self.audit_log.append(log_entry)
-        
+
         # Keep audit log size manageable
         if len(self.audit_log) > 10000:
             self.audit_log = self.audit_log[-5000:]  # Keep last 5000 entries
-    
-    def export_compliance_data(self, output_file: Path, 
-                              regulation: Optional[ComplianceRegulation] = None):
+
+    def export_compliance_data(self, output_file: Path,
+                              regulation: ComplianceRegulation | None = None):
         """
         Export compliance data for external audit.
         
@@ -656,31 +655,31 @@ class QuantumComplianceManager:
                 for reg, rules in self.compliance_rules.items()
             }
         }
-        
+
         try:
             with open(output_file, 'w', encoding='utf-8') as f:
                 json.dump(export_data, f, indent=2, default=str)
-            
+
             logger.info(f"Compliance data exported to {output_file}")
-            
+
             self._add_audit_log("compliance_data_exported", {
                 "output_file": str(output_file),
                 "regulation": regulation.value if regulation else "all"
             })
-            
-        except IOError as e:
+
+        except OSError as e:
             logger.error(f"Failed to export compliance data: {e}")
 
 
 # Global compliance manager instance
-_compliance_manager: Optional[QuantumComplianceManager] = None
+_compliance_manager: QuantumComplianceManager | None = None
 
 
 def get_compliance_manager(regulation: ComplianceRegulation = ComplianceRegulation.GDPR) -> QuantumComplianceManager:
     """Get the global compliance manager instance."""
     global _compliance_manager
-    
+
     if _compliance_manager is None:
         _compliance_manager = QuantumComplianceManager(regulation)
-    
+
     return _compliance_manager

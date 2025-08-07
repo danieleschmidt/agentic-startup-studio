@@ -5,13 +5,13 @@ This module defines Pydantic models for idea representation, validation,
 and status management following the data pipeline requirements.
 """
 
-from datetime import datetime, timezone
+import logging
+from datetime import UTC, datetime
 from enum import Enum
-from typing import List, Optional, Dict, Any
+from typing import Any
 from uuid import UUID, uuid4
 
-from pydantic import BaseModel, Field, field_validator, model_validator, ConfigDict
-import logging
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 logger = logging.getLogger(__name__)
 
@@ -58,39 +58,39 @@ class IdeaCategory(str, Enum):
 
 class IdeaDraft(BaseModel):
     """Input model for creating new ideas with validation."""
-    
+
     title: str = Field(
-        ..., 
-        min_length=10, 
+        ...,
+        min_length=10,
         max_length=200,
         description="Concise idea title"
     )
     description: str = Field(
-        ..., 
-        min_length=10, 
+        ...,
+        min_length=10,
         max_length=5000,
         description="Detailed idea description"
     )
-    category: Optional[IdeaCategory] = Field(
+    category: IdeaCategory | None = Field(
         default=IdeaCategory.UNCATEGORIZED,
         description="Business category classification"
     )
-    problem_statement: Optional[str] = Field(
+    problem_statement: str | None = Field(
         default=None,
         max_length=1000,
         description="Problem this idea solves"
     )
-    solution_description: Optional[str] = Field(
+    solution_description: str | None = Field(
         default=None,
         max_length=1000,
         description="How the solution works"
     )
-    target_market: Optional[str] = Field(
+    target_market: str | None = Field(
         default=None,
         max_length=500,
         description="Target customer segment"
     )
-    evidence_links: List[str] = Field(
+    evidence_links: list[str] = Field(
         default_factory=list,
         description="Supporting evidence URLs"
     )
@@ -101,14 +101,14 @@ class IdeaDraft(BaseModel):
         """Validate text fields for basic security and quality."""
         if not v or not v.strip():
             raise ValueError("Text content cannot be empty or whitespace only")
-        
+
         # Basic HTML/script injection prevention
         dangerous_patterns = ['<script', 'javascript:', 'data:', 'vbscript:']
         v_lower = v.lower()
         for pattern in dangerous_patterns:
             if pattern in v_lower:
                 raise ValueError(f"Potentially dangerous content detected: {pattern}")
-        
+
         return v.strip()
 
     @field_validator('evidence_links')
@@ -117,7 +117,7 @@ class IdeaDraft(BaseModel):
         """Validate evidence links are proper URLs."""
         if not v:
             return v
-        
+
         validated_links = []
         for link in v:
             if not isinstance(link, str):
@@ -125,7 +125,7 @@ class IdeaDraft(BaseModel):
             link = link.strip()
             if link and (link.startswith('http://') or link.startswith('https://')):
                 validated_links.append(link)
-        
+
         return validated_links
 
     model_config = ConfigDict(
@@ -136,7 +136,7 @@ class IdeaDraft(BaseModel):
 
 class Idea(BaseModel):
     """Complete idea entity with metadata and tracking."""
-    
+
     idea_id: UUID = Field(default_factory=uuid4, description="Unique identifier")
     title: str = Field(..., min_length=10, max_length=200)
     description: str = Field(..., min_length=10, max_length=5000)
@@ -144,23 +144,23 @@ class Idea(BaseModel):
     status: IdeaStatus = Field(default=IdeaStatus.DRAFT)
     current_stage: PipelineStage = Field(default=PipelineStage.IDEATE)
     stage_progress: float = Field(default=0.0, ge=0.0, le=1.0)
-    
+
     # Optional detailed fields
-    problem_statement: Optional[str] = Field(default=None, max_length=1000)
-    solution_description: Optional[str] = Field(default=None, max_length=1000)
-    target_market: Optional[str] = Field(default=None, max_length=500)
-    evidence_links: List[str] = Field(default_factory=list)
-    
+    problem_statement: str | None = Field(default=None, max_length=1000)
+    solution_description: str | None = Field(default=None, max_length=1000)
+    target_market: str | None = Field(default=None, max_length=500)
+    evidence_links: list[str] = Field(default_factory=list)
+
     # Metadata
-    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    created_by: Optional[str] = Field(default=None, max_length=100)
-    
+    created_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    updated_at: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    created_by: str | None = Field(default=None, max_length=100)
+
     # Pipeline artifacts
-    deck_path: Optional[str] = Field(default=None, max_length=500)
-    research_data: Dict[str, Any] = Field(default_factory=dict)
-    investor_scores: Dict[str, float] = Field(default_factory=dict)
-    
+    deck_path: str | None = Field(default=None, max_length=500)
+    research_data: dict[str, Any] = Field(default_factory=dict)
+    investor_scores: dict[str, float] = Field(default_factory=dict)
+
     @field_validator('stage_progress')
     @classmethod
     def validate_progress(cls, v):
@@ -175,16 +175,16 @@ class Idea(BaseModel):
         # Ensure status and stage are consistent
         if self.status == IdeaStatus.DRAFT and self.current_stage != PipelineStage.IDEATE:
             raise ValueError("Draft ideas must be in IDEATE stage")
-        
+
         return self
 
     def update_progress(self, new_progress: float) -> None:
         """Update stage progress with validation."""
         if not 0.0 <= new_progress <= 1.0:
             raise ValueError("Progress must be between 0.0 and 1.0")
-        
+
         self.stage_progress = new_progress
-        self.updated_at = datetime.now(timezone.utc)
+        self.updated_at = datetime.now(UTC)
 
     def advance_stage(self, next_stage: PipelineStage) -> None:
         """Advance to next pipeline stage."""
@@ -197,12 +197,12 @@ class Idea(BaseModel):
             self.status = IdeaStatus.TESTING
         elif next_stage == PipelineStage.COMPLETE:
             self.status = IdeaStatus.DEPLOYED
-        
+
         # Then update stage and progress
         self.current_stage = next_stage
         self.stage_progress = 0.0
-        self.updated_at = datetime.now(timezone.utc)
-        
+        self.updated_at = datetime.now(UTC)
+
         logger.info(
             f"Idea {self.idea_id} advanced to stage {next_stage.value}",
             extra={
@@ -224,14 +224,14 @@ class Idea(BaseModel):
 
 class IdeaSummary(BaseModel):
     """Lightweight idea summary for listing operations."""
-    
+
     id: UUID
     title: str
     status: IdeaStatus
     stage: PipelineStage
     created_at: datetime
     progress: float = Field(ge=0.0, le=1.0)
-    
+
     model_config = ConfigDict(
         use_enum_values=True
     )
@@ -239,24 +239,24 @@ class IdeaSummary(BaseModel):
 
 class ValidationResult(BaseModel):
     """Result of idea validation with errors and warnings."""
-    
+
     is_valid: bool = Field(default=True)
-    errors: List[str] = Field(default_factory=list)
-    warnings: List[str] = Field(default_factory=list)
-    
+    errors: list[str] = Field(default_factory=list)
+    warnings: list[str] = Field(default_factory=list)
+
     def has_errors(self) -> bool:
         """Check if validation found errors."""
         return len(self.errors) > 0
-    
+
     def has_warnings(self) -> bool:
         """Check if validation found warnings."""
         return len(self.warnings) > 0
-    
+
     def add_error(self, error: str) -> None:
         """Add validation error."""
         self.errors.append(error)
         self.is_valid = False
-    
+
     def add_warning(self, warning: str) -> None:
         """Add validation warning."""
         self.warnings.append(warning)
@@ -264,13 +264,13 @@ class ValidationResult(BaseModel):
 
 class DuplicateCheckResult(BaseModel):
     """Result of duplicate detection analysis."""
-    
+
     found_similar: bool = Field(default=False)
-    exact_matches: List[UUID] = Field(default_factory=list)
-    similar_ideas: List[UUID] = Field(default_factory=list)
-    similarity_scores: Dict[str, float] = Field(default_factory=dict)
-    
-    def get_top_matches(self, limit: int = 5) -> List[tuple[UUID, float]]:
+    exact_matches: list[UUID] = Field(default_factory=list)
+    similar_ideas: list[UUID] = Field(default_factory=list)
+    similarity_scores: dict[str, float] = Field(default_factory=dict)
+
+    def get_top_matches(self, limit: int = 5) -> list[tuple[UUID, float]]:
         """Get top similar ideas by score."""
         sorted_matches = sorted(
             self.similarity_scores.items(),
@@ -282,22 +282,22 @@ class DuplicateCheckResult(BaseModel):
 
 class QueryParams(BaseModel):
     """Parameters for querying ideas with filters."""
-    
-    status_filter: Optional[List[IdeaStatus]] = Field(default=None)
-    stage_filter: Optional[List[PipelineStage]] = Field(default=None)
-    category_filter: Optional[List[IdeaCategory]] = Field(default=None)
-    created_after: Optional[datetime] = Field(default=None)
-    created_before: Optional[datetime] = Field(default=None)
-    search_text: Optional[str] = Field(default=None, max_length=200)
-    
+
+    status_filter: list[IdeaStatus] | None = Field(default=None)
+    stage_filter: list[PipelineStage] | None = Field(default=None)
+    category_filter: list[IdeaCategory] | None = Field(default=None)
+    created_after: datetime | None = Field(default=None)
+    created_before: datetime | None = Field(default=None)
+    search_text: str | None = Field(default=None, max_length=200)
+
     # Pagination
     limit: int = Field(default=20, ge=1, le=100)
     offset: int = Field(default=0, ge=0)
-    
+
     # Sorting
     sort_by: str = Field(default="created_at")
     sort_desc: bool = Field(default=True)
-    
+
     def has_similarity_filter(self) -> bool:
         """Check if query includes similarity-based filtering."""
         return self.search_text is not None
@@ -309,15 +309,15 @@ class QueryParams(BaseModel):
 
 class AuditEntry(BaseModel):
     """Audit trail entry for idea changes."""
-    
+
     entry_id: UUID = Field(default_factory=uuid4)
     idea_id: UUID
     action: str
-    changes: Dict[str, Any] = Field(default_factory=dict)
-    user_id: Optional[str] = Field(default=None)
-    timestamp: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
-    correlation_id: Optional[str] = Field(default=None)
-    
+    changes: dict[str, Any] = Field(default_factory=dict)
+    user_id: str | None = Field(default=None)
+    timestamp: datetime = Field(default_factory=lambda: datetime.now(UTC))
+    correlation_id: str | None = Field(default=None)
+
     model_config = ConfigDict(
         json_encoders={
             datetime: lambda v: v.isoformat(),

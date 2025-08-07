@@ -6,50 +6,47 @@ using circuit breaker patterns, retry logic, and comprehensive error handling.
 """
 
 from .base_adapter import (
-    BaseAdapter,
     AdapterConfig,
     AdapterError,
-    ConnectionError,
-    TimeoutError,
-    RateLimitError,
+    APIError,
     AuthenticationError,
-    APIError
+    BaseAdapter,
+    ConnectionError,
+    RateLimitError,
+    TimeoutError,
 )
-
-from .google_ads_adapter import (
-    GoogleAdsAdapter,
-    GoogleAdsConfig,
-    CampaignData,
-    KeywordData,
-    PerformanceMetrics,
-    CampaignStatus,
-    BiddingStrategy,
-    create_google_ads_adapter
-)
-
-from .posthog_adapter import (
-    PostHogAdapter,
-    PostHogConfig,
-    EventData,
-    UserData,
-    FeatureFlagData,
-    AnalyticsQuery,
-    EventType,
-    FeatureFlagType,
-    create_posthog_adapter
-)
-
 from .flyio_adapter import (
-    FlyioAdapter,
-    FlyioConfig,
     AppConfig,
-    DeploymentConfig,
-    ScalingConfig,
-    MachineConfig,
     AppMetrics,
     AppStatus,
+    DeploymentConfig,
+    FlyioAdapter,
+    FlyioConfig,
+    MachineConfig,
     RegionCode,
-    create_flyio_adapter
+    ScalingConfig,
+    create_flyio_adapter,
+)
+from .google_ads_adapter import (
+    BiddingStrategy,
+    CampaignData,
+    CampaignStatus,
+    GoogleAdsAdapter,
+    GoogleAdsConfig,
+    KeywordData,
+    PerformanceMetrics,
+    create_google_ads_adapter,
+)
+from .posthog_adapter import (
+    AnalyticsQuery,
+    EventData,
+    EventType,
+    FeatureFlagData,
+    FeatureFlagType,
+    PostHogAdapter,
+    PostHogConfig,
+    UserData,
+    create_posthog_adapter,
 )
 
 __all__ = [
@@ -62,7 +59,7 @@ __all__ = [
     "RateLimitError",
     "AuthenticationError",
     "APIError",
-    
+
     # Google Ads Adapter
     "GoogleAdsAdapter",
     "GoogleAdsConfig",
@@ -72,7 +69,7 @@ __all__ = [
     "CampaignStatus",
     "BiddingStrategy",
     "create_google_ads_adapter",
-    
+
     # PostHog Adapter
     "PostHogAdapter",
     "PostHogConfig",
@@ -83,7 +80,7 @@ __all__ = [
     "EventType",
     "FeatureFlagType",
     "create_posthog_adapter",
-    
+
     # Fly.io Adapter
     "FlyioAdapter",
     "FlyioConfig",
@@ -95,7 +92,7 @@ __all__ = [
     "AppStatus",
     "RegionCode",
     "create_flyio_adapter",
-    
+
     # Utility Functions
     "get_adapter",
     "create_adapters_from_config",
@@ -127,7 +124,7 @@ def get_adapter(adapter_name: str, config: dict):
     """
     if adapter_name not in ADAPTER_REGISTRY:
         raise ValueError(f"Unknown adapter: {adapter_name}. Available: {list(ADAPTER_REGISTRY.keys())}")
-    
+
     adapter_class = ADAPTER_REGISTRY[adapter_name]
     return adapter_class(config)
 
@@ -140,10 +137,10 @@ async def get_all_adapter_health() -> dict:
         Dictionary mapping adapter names to their health status
     """
     from pipeline.config.settings import get_settings
-    
+
     health_status = {}
     settings = get_settings()
-    
+
     # Check Google Ads adapter
     try:
         if hasattr(settings, 'GOOGLE_ADS_DEVELOPER_TOKEN') and settings.GOOGLE_ADS_DEVELOPER_TOKEN:
@@ -162,7 +159,7 @@ async def get_all_adapter_health() -> dict:
             'service': 'Google Ads API',
             'error': str(e)
         }
-    
+
     # Check PostHog adapter
     try:
         if hasattr(settings, 'POSTHOG_PROJECT_API_KEY') and settings.POSTHOG_PROJECT_API_KEY:
@@ -181,7 +178,7 @@ async def get_all_adapter_health() -> dict:
             'service': 'PostHog Analytics',
             'error': str(e)
         }
-    
+
     # Check Fly.io adapter
     try:
         if hasattr(settings, 'FLYIO_API_TOKEN') and settings.FLYIO_API_TOKEN:
@@ -200,7 +197,7 @@ async def get_all_adapter_health() -> dict:
             'service': 'Fly.io Platform',
             'error': str(e)
         }
-    
+
     return health_status
 
 
@@ -232,10 +229,10 @@ def get_adapter_factory(adapter_name: str):
         'posthog': create_posthog_adapter,
         'flyio': create_flyio_adapter
     }
-    
+
     if adapter_name not in factory_map:
         raise ValueError(f"Unknown adapter: {adapter_name}. Available: {list(factory_map.keys())}")
-    
+
     return factory_map[adapter_name]
 
 
@@ -250,9 +247,9 @@ def create_adapters_from_config(adapters_config: dict) -> dict:
         Dictionary mapping adapter names to their instances
     """
     adapters = {}
-    
+
     for adapter_name, config in adapters_config.items():
         if adapter_name in ADAPTER_REGISTRY:
             adapters[adapter_name] = get_adapter(adapter_name, config)
-    
+
     return adapters

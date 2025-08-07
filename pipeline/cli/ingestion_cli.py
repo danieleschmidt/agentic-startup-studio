@@ -9,19 +9,17 @@ import asyncio
 import json
 import logging
 import sys
-from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any
 from uuid import UUID
 
 import click
 from rich.console import Console
 from rich.panel import Panel
-from rich.progress import BarColumn, Progress, TextColumn
-from rich.prompt import Confirm, Prompt
+from rich.prompt import Confirm
 from rich.table import Table
-from rich.text import Text
 
-from pipeline.config.settings import get_config_summary, get_settings
+from core import idea_ledger
+from pipeline.config.settings import get_config_summary
 from pipeline.ingestion.idea_manager import (
     DuplicateIdeaError,
     IdeaManagementError,
@@ -30,7 +28,6 @@ from pipeline.ingestion.idea_manager import (
     ValidationError,
     create_idea_manager,
 )
-from core import idea_ledger
 from pipeline.models.idea import (
     Idea,
     IdeaCategory,
@@ -121,7 +118,7 @@ def display_idea_summary(summary: IdeaSummary) -> None:
     console.print()
 
 
-def validate_idea_data(data: Dict[str, Any]) -> Dict[str, Any]:
+def validate_idea_data(data: dict[str, Any]) -> dict[str, Any]:
     """Validate and clean CLI input data."""
     # Required fields validation
     if not data.get("title", "").strip():
@@ -242,7 +239,7 @@ async def create(
             }
             console.print(json.dumps(result, indent=2))
         else:
-            console.print(f"[green]✓[/green] Idea created successfully!")
+            console.print("[green]✓[/green] Idea created successfully!")
             console.print(f"[bold]ID:[/bold] {idea_id}")
 
             if warnings:
@@ -496,7 +493,7 @@ async def update(idea_id, title, description, category, problem, solution, marke
             )
 
         if success:
-            console.print(f"[green]✓[/green] Idea updated successfully!")
+            console.print("[green]✓[/green] Idea updated successfully!")
             console.print(f"Updated fields: {', '.join(updates.keys())}")
         else:
             console.print("[red]Update failed[/red]")
@@ -666,11 +663,11 @@ class IdeaIngestionCLI:
         self,
         title: str,
         description: str,
-        category: Optional[str] = None,
-        tags: Optional[List[str]] = None,
-        evidence: Optional[str] = None,
+        category: str | None = None,
+        tags: list[str] | None = None,
+        evidence: str | None = None,
         force: bool = False,
-        user_id: Optional[str] = None,
+        user_id: str | None = None,
     ) -> bool:
         """Create a new idea and display results."""
         try:
@@ -692,7 +689,7 @@ class IdeaIngestionCLI:
             )
 
             # Display success
-            console.print(f"[green]✓[/green] Idea successfully created!")
+            console.print("[green]✓[/green] Idea successfully created!")
             console.print(f"[bold]ID:[/bold] {idea_id}")
 
             if warnings:
@@ -742,8 +739,8 @@ class IdeaIngestionCLI:
 
     async def list_ideas(
         self,
-        status: Optional[str] = None,
-        category: Optional[str] = None,
+        status: str | None = None,
+        category: str | None = None,
         limit: int = 20,
     ) -> bool:
         """List ideas with optional filters."""
@@ -775,7 +772,7 @@ class IdeaIngestionCLI:
             return False
 
     async def advance_stage(
-        self, idea_id: str, next_stage: str, user_id: Optional[str] = None
+        self, idea_id: str, next_stage: str, user_id: str | None = None
     ) -> bool:
         """Advance idea to next stage."""
         try:
@@ -793,9 +790,8 @@ class IdeaIngestionCLI:
                     f"[green]✓[/green] Stage advanced to {next_stage.upper()}!"
                 )
                 return True
-            else:
-                console.print("[red]Failed to advance stage[/red]")
-                return False
+            console.print("[red]Failed to advance stage[/red]")
+            return False
 
         except UserInputError as e:
             console.print(f"[red]{e}[/red]")
@@ -830,7 +826,7 @@ class IdeaIngestionCLI:
 
         return "\n".join(details)
 
-    def _format_ideas_table(self, ideas: List[IdeaSummary]) -> str:
+    def _format_ideas_table(self, ideas: list[IdeaSummary]) -> str:
         """Format ideas as a table."""
         table = Table()
         table.add_column("ID")

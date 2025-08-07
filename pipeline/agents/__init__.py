@@ -6,23 +6,23 @@ for coordinating the startup studio pipeline workflow.
 """
 
 from .agent_orchestrator import (
-    AgentRole,
-    WorkflowState, 
     AgentCapability,
     AgentContext,
     AgentDecision,
+    AgentOrchestrator,
+    AgentRole,
     BaseAgent,
     CEOAgent,
     CTOAgent,
     VCAgent,
-    AgentOrchestrator,
-    get_agent_orchestrator
+    WorkflowState,
+    get_agent_orchestrator,
 )
 
 __all__ = [
     'AgentRole',
     'WorkflowState',
-    'AgentCapability', 
+    'AgentCapability',
     'AgentContext',
     'AgentDecision',
     'BaseAgent',

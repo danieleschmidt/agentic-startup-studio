@@ -10,106 +10,114 @@ Orchestrates the full 4-phase workflow:
 Integrates all core services with budget tracking and quality gates.
 """
 
-import logging
 import asyncio
-import json
-from datetime import datetime
-from typing import Dict, List, Optional, Any
+import logging
 from dataclasses import dataclass, field
-from pathlib import Path
+from datetime import datetime
+from typing import Any
 
-# Core service imports
-from pipeline.services.budget_sentinel import get_budget_sentinel, BudgetCategory
-from pipeline.services.workflow_orchestrator import get_workflow_orchestrator, WorkflowState
-from pipeline.services.evidence_collector import get_evidence_collector, ResearchDomain
-from pipeline.services.pitch_deck_generator import get_pitch_deck_generator, InvestorType
-from pipeline.services.campaign_generator import get_campaign_generator, MVPType, MVPRequest
+from pipeline.config.cache_manager import get_cache_manager
 
 # Configuration and utilities
 from pipeline.config.settings import get_settings
-from pipeline.config.cache_manager import get_cache_manager, cache_result
 from pipeline.ingestion.idea_manager import create_idea_manager
 from pipeline.ingestion.validators import create_validator
+
+# Core service imports
+from pipeline.services.budget_sentinel import BudgetCategory, get_budget_sentinel
+from pipeline.services.campaign_generator import (
+    MVPRequest,
+    MVPType,
+    get_campaign_generator,
+)
+from pipeline.services.evidence_collector import ResearchDomain, get_evidence_collector
+from pipeline.services.pitch_deck_generator import (
+    InvestorType,
+    get_pitch_deck_generator,
+)
+from pipeline.services.workflow_orchestrator import (
+    get_workflow_orchestrator,
+)
 
 
 @dataclass
 class PipelineResult:
     """Complete pipeline execution result."""
     startup_idea: str
-    
+
     # Phase results
-    validation_result: Dict[str, Any] = field(default_factory=dict)
-    evidence_collection_result: Dict[str, List] = field(default_factory=dict)
+    validation_result: dict[str, Any] = field(default_factory=dict)
+    evidence_collection_result: dict[str, list] = field(default_factory=dict)
     pitch_deck_result: Any = None  # PitchDeck object
     campaign_result: Any = None    # Campaign object
     mvp_result: Any = None         # MVPResult object
-    
+
     # Quality metrics
     overall_quality_score: float = 0.0
     budget_utilization: float = 0.0
     execution_time_seconds: float = 0.0
-    
+
     # Status tracking
-    phases_completed: List[str] = field(default_factory=list)
-    phases_failed: List[str] = field(default_factory=list)
-    errors: List[str] = field(default_factory=list)
-    
+    phases_completed: list[str] = field(default_factory=list)
+    phases_failed: list[str] = field(default_factory=list)
+    errors: list[str] = field(default_factory=list)
+
     # Metadata
     execution_id: str = ""
     started_at: datetime = field(default_factory=datetime.utcnow)
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
 
 class MainPipeline:
     """Main pipeline orchestrator for complete workflow execution."""
-    
+
     def __init__(self):
         self.settings = get_settings()
         self.logger = logging.getLogger(__name__)
-        
+
         # Initialize all services
         self.budget_sentinel = get_budget_sentinel()
         self.workflow_orchestrator = get_workflow_orchestrator()
         self.evidence_collector = get_evidence_collector()
         self.pitch_deck_generator = get_pitch_deck_generator()
         self.campaign_generator = get_campaign_generator()
-        
+
         # These will be initialized async in execute_full_pipeline
         self.idea_manager = None
         self.startup_validator = None
         self.cache_manager = None
-        
+
         # Execution tracking
         self.current_execution_id = ""
         self.execution_start_time = None
-    
+
     async def _initialize_async_dependencies(self):
         """Initialize async dependencies in parallel."""
         # Initialize dependencies concurrently for better performance
         tasks = []
-        
+
         if self.idea_manager is None:
             tasks.append(self._init_idea_manager())
         if self.startup_validator is None:
             tasks.append(self._init_validator())
         if self.cache_manager is None:
             tasks.append(self._init_cache_manager())
-        
+
         if tasks:
             await asyncio.gather(*tasks)
-    
+
     async def _init_idea_manager(self):
         """Initialize idea manager."""
         self.idea_manager = await create_idea_manager()
-    
+
     async def _init_validator(self):
         """Initialize startup validator."""
         self.startup_validator = await create_validator()
-    
+
     async def _init_cache_manager(self):
         """Initialize cache manager."""
         self.cache_manager = await get_cache_manager()
-    
+
     async def execute_full_pipeline(
         self,
         startup_idea: str,
@@ -132,19 +140,19 @@ class MainPipeline:
         execution_id = f"pipeline_{datetime.utcnow().strftime('%Y%m%d_%H%M%S')}"
         self.current_execution_id = execution_id
         self.execution_start_time = datetime.utcnow()
-        
+
         self.logger.info(f"Starting full pipeline execution [{execution_id}]: {startup_idea[:100]}...")
-        
+
         # Initialize result tracking
         result = PipelineResult(
             startup_idea=startup_idea,
             execution_id=execution_id
         )
-        
+
         try:
             # Initialize async dependencies
             await self._initialize_async_dependencies()
-            
+
             # Track total pipeline cost
             async with self.budget_sentinel.track_operation(
                 "main_pipeline",
@@ -154,28 +162,28 @@ class MainPipeline:
             ):
                 # Phase 1: Data Ingestion and Validation
                 await self._execute_phase_1(startup_idea, result)
-                
+
                 # Phase 2: Data Processing (Evidence Collection)
                 await self._execute_phase_2(startup_idea, result)
-                
+
                 # Phase 3: Data Transformation (Pitch Deck Generation)
                 await self._execute_phase_3(startup_idea, target_investor, result)
-                
+
                 # Phase 4: Data Output (Campaign and MVP Generation)
                 # Campaign and MVP can be generated in parallel if MVP is requested
                 if generate_mvp and result.pitch_deck_result:
                     await self._execute_phase_4_parallel(startup_idea, result)
                 else:
                     await self._execute_phase_4(startup_idea, generate_mvp, result)
-                
+
                 # Calculate final metrics
                 await self._calculate_final_metrics(result)
-                
+
                 result.completed_at = datetime.utcnow()
                 result.execution_time_seconds = (
                     result.completed_at - result.started_at
                 ).total_seconds()
-                
+
                 self.logger.info(
                     f"Pipeline execution completed [{execution_id}]: "
                     f"{len(result.phases_completed)}/4 phases successful, "
@@ -183,19 +191,19 @@ class MainPipeline:
                     f"budget utilization: {result.budget_utilization:.1%}, "
                     f"execution time: {result.execution_time_seconds:.1f}s"
                 )
-                
+
                 return result
-                
+
         except Exception as e:
             result.errors.append(f"Pipeline execution failed: {str(e)}")
             result.completed_at = datetime.utcnow()
             self.logger.error(f"Pipeline execution failed [{execution_id}]: {e}")
             return result
-    
+
     async def _execute_phase_1(self, startup_idea: str, result: PipelineResult) -> None:
         """Execute Phase 1: Data Ingestion and Validation."""
         self.logger.info("Executing Phase 1: Data Ingestion and Validation")
-        
+
         try:
             # Validate startup idea
             validation_result = await self.startup_validator.validate_startup_idea({
@@ -203,7 +211,7 @@ class MainPipeline:
                 'target_market': 'general',
                 'business_model': 'tbd'
             })
-            
+
             # Store idea if validation passes
             if validation_result.get('is_valid', False):
                 idea_record = await self.idea_manager.create_idea({
@@ -212,23 +220,23 @@ class MainPipeline:
                     'market_potential': validation_result.get('market_score', 0.0)
                 })
                 validation_result['idea_id'] = idea_record.get('id')
-            
+
             result.validation_result = validation_result
             result.phases_completed.append("phase_1_ingestion")
-            
+
             self.logger.info(
                 f"Phase 1 completed: validation score {validation_result.get('overall_score', 0.0):.2f}"
             )
-            
+
         except Exception as e:
             result.phases_failed.append("phase_1_ingestion")
             result.errors.append(f"Phase 1 failed: {str(e)}")
             self.logger.error(f"Phase 1 execution failed: {e}")
-    
+
     async def _execute_phase_2(self, startup_idea: str, result: PipelineResult) -> None:
         """Execute Phase 2: Data Processing (Evidence Collection)."""
         self.logger.info("Executing Phase 2: Data Processing (Evidence Collection)")
-        
+
         try:
             # Define research domains for evidence collection
             research_domains = [
@@ -251,17 +259,17 @@ class MainPipeline:
                     quality_threshold=0.6
                 )
             ]
-            
+
             # Check cache for evidence collection results
             domain_names = [domain.name for domain in research_domains]
             cache_key = f"evidence:{hash(startup_idea)}:{':'.join(sorted(domain_names))}"
-            
+
             evidence_by_domain = None
             if self.cache_manager:
                 evidence_by_domain = await self.cache_manager.get(cache_key)
                 if evidence_by_domain:
                     self.logger.info("Using cached evidence collection results")
-            
+
             # Collect evidence if not cached
             if evidence_by_domain is None:
                 evidence_by_domain = await self.evidence_collector.collect_evidence(
@@ -270,11 +278,11 @@ class MainPipeline:
                     min_total_evidence=5,
                     timeout=120
                 )
-                
+
                 # Cache the results for 30 minutes
                 if self.cache_manager:
                     await self.cache_manager.set(cache_key, evidence_by_domain, ttl_seconds=1800)
-            
+
             result.evidence_collection_result = {
                 domain: [
                     {
@@ -287,17 +295,17 @@ class MainPipeline:
                 ]
                 for domain, evidence_list in evidence_by_domain.items()
             }
-            
+
             result.phases_completed.append("phase_2_processing")
-            
+
             total_evidence = sum(len(evidence) for evidence in evidence_by_domain.values())
             self.logger.info(f"Phase 2 completed: collected {total_evidence} evidence items")
-            
+
         except Exception as e:
             result.phases_failed.append("phase_2_processing")
             result.errors.append(f"Phase 2 failed: {str(e)}")
             self.logger.error(f"Phase 2 execution failed: {e}")
-    
+
     async def _execute_phase_3(
         self,
         startup_idea: str,
@@ -306,12 +314,12 @@ class MainPipeline:
     ) -> None:
         """Execute Phase 3: Data Transformation (Pitch Deck Generation)."""
         self.logger.info("Executing Phase 3: Data Transformation (Pitch Deck Generation)")
-        
+
         try:
             # Convert evidence collection result back to evidence objects for pitch deck generation
             # In a real implementation, we'd maintain object references or use proper serialization
             evidence_by_domain = {}
-            
+
             # Generate pitch deck from startup idea and evidence
             pitch_deck = await self.pitch_deck_generator.generate_pitch_deck(
                 startup_idea=startup_idea,
@@ -319,7 +327,7 @@ class MainPipeline:
                 target_investor=target_investor,
                 max_cost=8.0
             )
-            
+
             result.pitch_deck_result = {
                 'startup_name': pitch_deck.startup_name,
                 'investor_type': pitch_deck.investor_type.value,
@@ -337,22 +345,22 @@ class MainPipeline:
                     for slide in pitch_deck.slides
                 ]
             }
-            
+
             # Store reference to actual pitch deck for next phase
             result._pitch_deck_object = pitch_deck
-            
+
             result.phases_completed.append("phase_3_transformation")
-            
+
             self.logger.info(
                 f"Phase 3 completed: generated {len(pitch_deck.slides)} slides, "
                 f"quality score {pitch_deck.overall_quality_score:.2f}"
             )
-            
+
         except Exception as e:
             result.phases_failed.append("phase_3_transformation")
             result.errors.append(f"Phase 3 failed: {str(e)}")
             self.logger.error(f"Phase 3 execution failed: {e}")
-    
+
     async def _execute_phase_4(
         self,
         startup_idea: str,
@@ -361,7 +369,7 @@ class MainPipeline:
     ) -> None:
         """Execute Phase 4: Data Output (Campaign and MVP Generation)."""
         self.logger.info("Executing Phase 4: Data Output (Campaign and MVP Generation)")
-        
+
         try:
             # Generate smoke test campaign from pitch deck
             if hasattr(result, '_pitch_deck_object'):
@@ -370,10 +378,10 @@ class MainPipeline:
                     budget_limit=25.0,
                     duration_days=7
                 )
-                
+
                 # Execute the campaign
                 executed_campaign = await self.campaign_generator.execute_campaign(campaign)
-                
+
                 result.campaign_result = {
                     'name': executed_campaign.name,
                     'type': executed_campaign.campaign_type.value,
@@ -386,11 +394,11 @@ class MainPipeline:
                     'posthog_project_id': executed_campaign.posthog_project_id,
                     'landing_page_url': executed_campaign.landing_page_url
                 }
-            
+
             # Generate MVP if requested
             if generate_mvp:
                 startup_name = result.pitch_deck_result.get('startup_name', 'Startup') if result.pitch_deck_result else 'Startup'
-                
+
                 mvp_request = MVPRequest(
                     mvp_type=MVPType.LANDING_PAGE,
                     startup_name=startup_name,
@@ -403,12 +411,12 @@ class MainPipeline:
                     target_platforms=["web"],
                     tech_stack=["python", "flask", "html", "css", "javascript"]
                 )
-                
+
                 mvp_result = await self.campaign_generator.generate_mvp(
                     mvp_request=mvp_request,
                     max_cost=4.0
                 )
-                
+
                 result.mvp_result = {
                     'type': mvp_result.mvp_type.value,
                     'file_count': len(mvp_result.generated_files),
@@ -419,65 +427,65 @@ class MainPipeline:
                     'deployment_success': mvp_result.deployment_success,
                     'generation_cost': mvp_result.generation_cost
                 }
-            
+
             result.phases_completed.append("phase_4_output")
-            
+
             self.logger.info("Phase 4 completed: campaign and MVP generated successfully")
-            
+
         except Exception as e:
             result.phases_failed.append("phase_4_output")
             result.errors.append(f"Phase 4 failed: {str(e)}")
             self.logger.error(f"Phase 4 execution failed: {e}")
-    
+
     async def _execute_phase_4_parallel(self, startup_idea: str, result: PipelineResult) -> None:
         """Execute Phase 4 with parallel campaign and MVP generation."""
         self.logger.info("Executing Phase 4: Parallel Campaign and MVP Generation")
-        
+
         try:
             # Prepare tasks for parallel execution
             tasks = []
-            
+
             # Campaign generation task
             if hasattr(result, '_pitch_deck_object'):
                 tasks.append(self._generate_campaign(result))
-            
+
             # MVP generation task
             tasks.append(self._generate_mvp(startup_idea, result))
-            
+
             # Execute both tasks in parallel
             if tasks:
                 campaign_result, mvp_result = await asyncio.gather(*tasks, return_exceptions=True)
-                
+
                 # Handle campaign result
                 if not isinstance(campaign_result, Exception):
                     result.campaign_result = campaign_result
                 else:
                     result.errors.append(f"Campaign generation failed: {campaign_result}")
-                
+
                 # Handle MVP result
                 if not isinstance(mvp_result, Exception):
                     result.mvp_result = mvp_result
                 else:
                     result.errors.append(f"MVP generation failed: {mvp_result}")
-            
+
             result.phases_completed.append("phase_4_output")
             self.logger.info("Phase 4 parallel execution completed successfully")
-            
+
         except Exception as e:
             result.phases_failed.append("phase_4_output")
             result.errors.append(f"Phase 4 parallel execution failed: {str(e)}")
             self.logger.error(f"Phase 4 parallel execution failed: {e}")
-    
-    async def _generate_campaign(self, result: PipelineResult) -> Dict[str, Any]:
+
+    async def _generate_campaign(self, result: PipelineResult) -> dict[str, Any]:
         """Generate smoke test campaign."""
         campaign = await self.campaign_generator.generate_smoke_test_campaign(
             pitch_deck=result._pitch_deck_object,
             budget_limit=25.0,
             duration_days=7
         )
-        
+
         executed_campaign = await self.campaign_generator.execute_campaign(campaign)
-        
+
         return {
             'name': executed_campaign.name,
             'type': executed_campaign.campaign_type.value,
@@ -490,11 +498,11 @@ class MainPipeline:
             'posthog_project_id': executed_campaign.posthog_project_id,
             'landing_page_url': executed_campaign.landing_page_url
         }
-    
-    async def _generate_mvp(self, startup_idea: str, result: PipelineResult) -> Dict[str, Any]:
+
+    async def _generate_mvp(self, startup_idea: str, result: PipelineResult) -> dict[str, Any]:
         """Generate MVP."""
         startup_name = result.pitch_deck_result.get('startup_name', 'Startup') if result.pitch_deck_result else 'Startup'
-        
+
         mvp_request = MVPRequest(
             mvp_type=MVPType.LANDING_PAGE,
             startup_name=startup_name,
@@ -507,12 +515,12 @@ class MainPipeline:
             target_platforms=["web"],
             tech_stack=["python", "flask", "html", "css", "javascript"]
         )
-        
+
         mvp_result = await self.campaign_generator.generate_mvp(
             mvp_request=mvp_request,
             max_cost=4.0
         )
-        
+
         return {
             'type': mvp_result.mvp_type.value,
             'file_count': len(mvp_result.generated_files),
@@ -523,37 +531,37 @@ class MainPipeline:
             'deployment_success': mvp_result.deployment_success,
             'generation_cost': mvp_result.generation_cost
         }
-    
+
     async def _calculate_final_metrics(self, result: PipelineResult) -> None:
         """Calculate final pipeline quality and budget metrics."""
         try:
             # Calculate overall quality score
             quality_scores = []
-            
+
             if result.validation_result:
                 quality_scores.append(result.validation_result.get('overall_score', 0.0))
-            
+
             if result.pitch_deck_result:
                 quality_scores.append(result.pitch_deck_result.get('overall_quality_score', 0.0))
-            
+
             if result.campaign_result:
                 quality_scores.append(result.campaign_result.get('relevance_score', 0.0))
-            
+
             if result.mvp_result:
                 quality_scores.append(result.mvp_result.get('code_quality_score', 0.0))
-            
+
             result.overall_quality_score = sum(quality_scores) / len(quality_scores) if quality_scores else 0.0
-            
+
             # Calculate budget utilization
             budget_info = await self.budget_sentinel.get_budget_status()
             total_budget = budget_info.get('total_budget', 62.0)
             spent_budget = budget_info.get('total_spent', 0.0)
             result.budget_utilization = spent_budget / total_budget if total_budget > 0 else 0.0
-            
+
         except Exception as e:
             self.logger.warning(f"Failed to calculate final metrics: {e}")
-    
-    async def generate_pipeline_report(self, result: PipelineResult) -> Dict[str, Any]:
+
+    async def generate_pipeline_report(self, result: PipelineResult) -> dict[str, Any]:
         """Generate comprehensive pipeline execution report."""
         return {
             'execution_summary': {
@@ -590,26 +598,26 @@ class MainPipeline:
             'errors': result.errors,
             'recommendations': self._generate_recommendations(result)
         }
-    
-    def _generate_recommendations(self, result: PipelineResult) -> List[str]:
+
+    def _generate_recommendations(self, result: PipelineResult) -> list[str]:
         """Generate recommendations based on pipeline results."""
         recommendations = []
-        
+
         if result.overall_quality_score < 0.6:
             recommendations.append("Consider refining the startup concept for better market fit")
-        
+
         if result.budget_utilization > 0.9:
             recommendations.append("Budget utilization is high; consider optimizing costs")
-        
+
         if len(result.phases_failed) > 0:
             recommendations.append(f"Address failed phases: {', '.join(result.phases_failed)}")
-        
+
         if result.validation_result and result.validation_result.get('overall_score', 0.0) < 0.7:
             recommendations.append("Improve idea validation before proceeding to market")
-        
+
         if result.campaign_result and result.campaign_result.get('relevance_score', 0.0) < 0.7:
             recommendations.append("Optimize campaign messaging and targeting")
-        
+
         return recommendations
 
 

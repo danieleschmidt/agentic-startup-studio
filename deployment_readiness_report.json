@@ -1,0 +1,50 @@
+{
+  "timestamp": "2025-08-07T12:46:31.642136",
+  "summary": {
+    "total_checks": 36,
+    "passed_checks": 14,
+    "pass_rate": 38.88888888888889,
+    "status": "\u274c NOT READY",
+    "recommendation": "Major deployment components missing"
+  },
+  "detailed_results": {
+    "container_config": {
+      "dockerfile": true,
+      "docker_compose": true,
+      "production_compose": false,
+      "kubernetes": true,
+      "dockerignore": true
+    },
+    "environment_config": {
+      "env_example": true,
+      "env_production": false,
+      "settings_module": true,
+      "secrets_manager": true,
+      "startup_script": false
+    },
+    "security_config": {
+      "database_ssl": true,
+      "cors_configured": true,
+      "secret_key": "",
+      "nginx_config": false
+    },
+    "monitoring_config": {
+      "prometheus": false,
+      "grafana": true,
+      "health_checks": true,
+      "structured_logging": true
+    },
+    "scaling_config": {
+      "load_balancer": false,
+      "horizontal_scaling": false,
+      "service_mesh": false,
+      "connection_pooling": true
+    },
+    "backup_config": {
+      "backup_scripts": false,
+      "database_migrations": false,
+      "disaster_recovery_docs": false,
+      "retention_policies": false
+    }
+  }
+}

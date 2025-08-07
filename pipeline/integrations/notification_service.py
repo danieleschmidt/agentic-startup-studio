@@ -12,15 +12,15 @@ Provides multi-channel notification capabilities including:
 
 import asyncio
 import logging
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Union
-from enum import Enum
-import aiohttp
-import json
-from email.mime.text import MIMEText
-from email.mime.multipart import MIMEMultipart
 import smtplib
 import ssl
+from datetime import UTC, datetime
+from email.mime.multipart import MIMEMultipart
+from email.mime.text import MIMEText
+from enum import Enum
+from typing import Any
+
+import aiohttp
 
 from pipeline.config.settings import get_settings
 from pipeline.infrastructure.circuit_breaker import CircuitBreaker
@@ -49,25 +49,25 @@ class NotificationChannel(Enum):
 
 class NotificationTemplate:
     """Template for structured notifications."""
-    
+
     def __init__(
         self,
         title: str,
         body: str,
-        template_vars: Dict[str, Any] = None,
-        attachments: List[Dict[str, Any]] = None
+        template_vars: dict[str, Any] = None,
+        attachments: list[dict[str, Any]] = None
     ):
         self.title = title
         self.body = body
         self.template_vars = template_vars or {}
         self.attachments = attachments or []
-        self.created_at = datetime.now(timezone.utc)
-    
-    def render(self) -> Dict[str, str]:
+        self.created_at = datetime.now(UTC)
+
+    def render(self) -> dict[str, str]:
         """Render template with variables."""
         rendered_title = self.title.format(**self.template_vars)
         rendered_body = self.body.format(**self.template_vars)
-        
+
         return {
             'title': rendered_title,
             'body': rendered_body
@@ -76,82 +76,82 @@ class NotificationTemplate:
 
 class NotificationResult:
     """Result of a notification attempt."""
-    
+
     def __init__(
         self,
         success: bool,
         channel: NotificationChannel,
         message_id: str = None,
         error: str = None,
-        metadata: Dict[str, Any] = None
+        metadata: dict[str, Any] = None
     ):
         self.success = success
         self.channel = channel
         self.message_id = message_id
         self.error = error
         self.metadata = metadata or {}
-        self.timestamp = datetime.now(timezone.utc)
+        self.timestamp = datetime.now(UTC)
 
 
 class EmailProvider:
     """Base class for email providers."""
-    
+
     async def send_email(
         self,
-        to: Union[str, List[str]],
+        to: str | list[str],
         subject: str,
         body: str,
         from_email: str = None,
         html_body: str = None,
-        attachments: List[Dict[str, Any]] = None
+        attachments: list[dict[str, Any]] = None
     ) -> NotificationResult:
         raise NotImplementedError
 
 
 class SMTPEmailProvider(EmailProvider):
     """SMTP email provider."""
-    
+
     def __init__(self, host: str, port: int, username: str, password: str, use_tls: bool = True):
         self.host = host
         self.port = port
         self.username = username
         self.password = password
         self.use_tls = use_tls
-    
+
     async def send_email(
         self,
-        to: Union[str, List[str]],
+        to: str | list[str],
         subject: str,
         body: str,
         from_email: str = None,
         html_body: str = None,
-        attachments: List[Dict[str, Any]] = None
+        attachments: list[dict[str, Any]] = None
     ) -> NotificationResult:
         """Send email via SMTP."""
-        
+
         try:
             # Prepare recipients
             recipients = [to] if isinstance(to, str) else to
             from_addr = from_email or self.username
-            
+
             # Create message
             msg = MIMEMultipart('alternative')
             msg['Subject'] = subject
             msg['From'] = from_addr
             msg['To'] = ', '.join(recipients)
-            
+
             # Add text part
             text_part = MIMEText(body, 'plain', 'utf-8')
             msg.attach(text_part)
-            
+
             # Add HTML part if provided
             if html_body:
                 html_part = MIMEText(html_body, 'html', 'utf-8')
                 msg.attach(html_part)
-            
+
             # Send email
             context = ssl.create_default_context()
-            
+
             if self.use_tls:
                 with smtplib.SMTP(self.host, self.port) as server:
                     server.starttls(context=context)
@@ -161,7 +161,7 @@ class SMTPEmailProvider(EmailProvider):
                 with smtplib.SMTP_SSL(self.host, self.port, context=context) as server:
                     server.login(self.username, self.password)
                     server.send_message(msg, from_addr, recipients)
-            
+
             logger.info(f"Email sent successfully to {recipients}")
             return NotificationResult(
                 success=True,
@@ -169,7 +169,7 @@ class SMTPEmailProvider(EmailProvider):
                 message_id=f"smtp_{datetime.now().timestamp()}",
                 metadata={'recipients': recipients, 'subject': subject}
             )
-            
+
         except Exception as e:
             logger.error(f"Failed to send email via SMTP: {e}")
             return NotificationResult(
@@ -181,7 +181,7 @@ class SMTPEmailProvider(EmailProvider):
 
 class SlackNotifier:
     """Slack notification handler."""
-    
+
     def __init__(self, webhook_url: str, bot_token: str = None):
         self.webhook_url = webhook_url
         self.bot_token = bot_token
@@ -190,18 +190,18 @@ class SlackNotifier:
             timeout_seconds=30,
             recovery_timeout=60
         )
-    
+
     async def send_message(
         self,
         text: str,
         channel: str = None,
         username: str = "Agentic Studio",
         icon_emoji: str = ":robot_face:",
-        attachments: List[Dict[str, Any]] = None,
-        blocks: List[Dict[str, Any]] = None
+        attachments: list[dict[str, Any]] = None,
+        blocks: list[dict[str, Any]] = None
     ) -> NotificationResult:
         """Send message to Slack."""
-        
+
         try:
             async with self.circuit_breaker:
                 payload = {
@@ -209,16 +209,16 @@ class SlackNotifier:
                     'username': username,
                     'icon_emoji': icon_emoji
                 }
-                
+
                 if channel:
                     payload['channel'] = channel
-                
+
                 if attachments:
                     payload['attachments'] = attachments
-                
+
                 if blocks:
                     payload['blocks'] = blocks
-                
+
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
                         self.webhook_url,
@@ -226,7 +226,7 @@ class SlackNotifier:
                         headers={'Content-Type': 'application/json'},
                         timeout=aiohttp.ClientTimeout(total=30)
                     ) as response:
-                        
+
                         if response.status == 200:
                             logger.info(f"Slack message sent successfully to {channel or 'default channel'}")
                             return NotificationResult(
@@ -235,10 +235,9 @@ class SlackNotifier:
                                 message_id=f"slack_{datetime.now().timestamp()}",
                                 metadata={'channel': channel, 'text': text[:100]}
                             )
-                        else:
-                            error_text = await response.text()
-                            raise Exception(f"Slack API error {response.status}: {error_text}")
-        
+                        error_text = await response.text()
+                        raise Exception(f"Slack API error {response.status}: {error_text}")
+
         except Exception as e:
             logger.error(f"Failed to send Slack message: {e}")
             return NotificationResult(
@@ -246,27 +245,27 @@ class SlackNotifier:
                 channel=NotificationChannel.SLACK,
                 error=str(e)
             )
-    
+
     async def send_rich_message(
         self,
         title: str,
         message: str,
         color: str = "good",
-        fields: List[Dict[str, Any]] = None,
+        fields: list[dict[str, Any]] = None,
         channel: str = None
     ) -> NotificationResult:
         """Send rich formatted message to Slack."""
-        
+
         attachment = {
             'color': color,
             'title': title,
             'text': message,
             'timestamp': int(datetime.now().timestamp())
         }
-        
+
         if fields:
             attachment['fields'] = fields
-        
+
         return await self.send_message(
             text=title,
             channel=channel,
@@ -276,7 +275,7 @@ class SlackNotifier:
 
 class DiscordNotifier:
     """Discord webhook notification handler."""
-    
+
     def __init__(self, webhook_url: str):
         self.webhook_url = webhook_url
         self.circuit_breaker = CircuitBreaker(
@@ -284,29 +283,29 @@ class DiscordNotifier:
             timeout_seconds=30,
             recovery_timeout=60
         )
-    
+
     async def send_message(
         self,
         content: str,
         username: str = "Agentic Studio",
         avatar_url: str = None,
-        embeds: List[Dict[str, Any]] = None
+        embeds: list[dict[str, Any]] = None
     ) -> NotificationResult:
         """Send message to Discord."""
-        
+
         try:
             async with self.circuit_breaker:
                 payload = {
                     'content': content,
                     'username': username
                 }
-                
+
                 if avatar_url:
                     payload['avatar_url'] = avatar_url
-                
+
                 if embeds:
                     payload['embeds'] = embeds
-                
+
                 async with aiohttp.ClientSession() as session:
                     async with session.post(
                         self.webhook_url,
@@ -314,7 +313,7 @@ class DiscordNotifier:
                         headers={'Content-Type': 'application/json'},
                         timeout=aiohttp.ClientTimeout(total=30)
                     ) as response:
-                        
+
                         if response.status in [200, 204]:
                             logger.info("Discord message sent successfully")
                             return NotificationResult(
@@ -323,10 +322,9 @@ class DiscordNotifier:
                                 message_id=f"discord_{datetime.now().timestamp()}",
                                 metadata={'content': content[:100]}
                             )
-                        else:
-                            error_text = await response.text()
-                            raise Exception(f"Discord webhook error {response.status}: {error_text}")
-        
+                        error_text = await response.text()
+                        raise Exception(f"Discord webhook error {response.status}: {error_text}")
+
         except Exception as e:
             logger.error(f"Failed to send Discord message: {e}")
             return NotificationResult(
@@ -334,34 +332,34 @@ class DiscordNotifier:
                 channel=NotificationChannel.DISCORD,
                 error=str(e)
             )
-    
+
     async def send_embed(
         self,
         title: str,
         description: str,
         color: int = 0x00ff00,
-        fields: List[Dict[str, Any]] = None,
+        fields: list[dict[str, Any]] = None,
         thumbnail_url: str = None,
         footer_text: str = None
     ) -> NotificationResult:
         """Send rich embed message to Discord."""
-        
+
         embed = {
             'title': title,
             'description': description,
             'color': color,
-            'timestamp': datetime.now(timezone.utc).isoformat()
+            'timestamp': datetime.now(UTC).isoformat()
         }
-        
+
         if fields:
             embed['fields'] = fields
-        
+
         if thumbnail_url:
             embed['thumbnail'] = {'url': thumbnail_url}
-        
+
         if footer_text:
             embed['footer'] = {'text': footer_text}
-        
+
         return await self.send_message(
             content="",
             embeds=[embed]
@@ -380,24 +378,24 @@ class NotificationService:
     - Rate limiting and circuit breakers
     - Notification preferences and user targeting
     """
-    
+
     def __init__(self):
         self.settings = get_settings()
-        
+
         # Initialize providers
         self.email_provider = self._setup_email_provider()
         self.slack_notifier = self._setup_slack_notifier()
         self.discord_notifier = self._setup_discord_notifier()
-        
+
         # Notification templates
         self.templates = self._load_notification_templates()
-        
+
         # Delivery tracking
         self.delivery_history = []
-        
+
         logger.info("Notification service initialized")
-    
-    def _setup_email_provider(self) -> Optional[EmailProvider]:
+
+    def _setup_email_provider(self) -> EmailProvider | None:
         """Set up email provider based on configuration."""
         try:
             if hasattr(self.settings, 'smtp_host'):
@@ -411,8 +409,8 @@ class NotificationService:
         except Exception as e:
             logger.warning(f"Failed to setup email provider: {e}")
         return None
-    
-    def _setup_slack_notifier(self) -> Optional[SlackNotifier]:
+
+    def _setup_slack_notifier(self) -> SlackNotifier | None:
         """Set up Slack notifier based on configuration."""
         try:
             if hasattr(self.settings, 'slack_webhook_url'):
@@ -423,8 +421,8 @@ class NotificationService:
         except Exception as e:
             logger.warning(f"Failed to setup Slack notifier: {e}")
         return None
-    
-    def _setup_discord_notifier(self) -> Optional[DiscordNotifier]:
+
+    def _setup_discord_notifier(self) -> DiscordNotifier | None:
         """Set up Discord notifier based on configuration."""
         try:
             if hasattr(self.settings, 'discord_webhook_url'):
@@ -432,8 +430,8 @@ class NotificationService:
         except Exception as e:
             logger.warning(f"Failed to setup Discord notifier: {e}")
         return None
-    
-    def _load_notification_templates(self) -> Dict[str, NotificationTemplate]:
+
+    def _load_notification_templates(self) -> dict[str, NotificationTemplate]:
         """Load predefined notification templates."""
         return {
             'idea_created': NotificationTemplate(
@@ -457,36 +455,36 @@ class NotificationService:
                 body="Here's your weekly summary:\n\n• Ideas Created: {ideas_created}\n• Ideas Validated: {ideas_validated}\n• Workflows Executed: {workflows_executed}\n• System Uptime: {uptime}\n\nTop performing idea: {top_idea}"
             )
         }
-    
+
     async def send_notification(
         self,
         template_name: str,
-        channels: List[NotificationChannel],
-        recipients: Dict[NotificationChannel, List[str]],
-        template_vars: Dict[str, Any] = None,
+        channels: list[NotificationChannel],
+        recipients: dict[NotificationChannel, list[str]],
+        template_vars: dict[str, Any] = None,
         priority: NotificationPriority = NotificationPriority.NORMAL
-    ) -> List[NotificationResult]:
+    ) -> list[NotificationResult]:
         """Send notification across multiple channels."""
-        
+
         if template_name not in self.templates:
             raise ValueError(f"Unknown template: {template_name}")
-        
+
         template = self.templates[template_name]
         if template_vars:
             template.template_vars.update(template_vars)
-        
+
         rendered = template.render()
         results = []
-        
+
         # Send to each channel
         for channel in channels:
             if channel not in recipients:
                 continue
-            
+
             channel_recipients = recipients[channel]
             if not channel_recipients:
                 continue
-            
+
             try:
                 if channel == NotificationChannel.EMAIL and self.email_provider:
                     result = await self._send_email_notification(
@@ -506,10 +504,10 @@ class NotificationService:
                         channel=channel,
                         error=f"Channel {channel.value} not configured or supported"
                     )
-                
+
                 results.append(result)
                 self.delivery_history.append(result)
-                
+
             except Exception as e:
                 logger.error(f"Failed to send notification via {channel.value}: {e}")
                 result = NotificationResult(
@@ -518,16 +516,16 @@ class NotificationService:
                     error=str(e)
                 )
                 results.append(result)
-        
+
         return results
-    
+
     async def _send_email_notification(
         self,
-        rendered: Dict[str, str],
-        recipients: List[str]
+        rendered: dict[str, str],
+        recipients: list[str]
     ) -> NotificationResult:
         """Send email notification."""
-        
+
         html_body = f"""
         <html>
         <body>
@@ -538,22 +536,22 @@ class NotificationService:
         </body>
         </html>
         """
-        
+
         return await self.email_provider.send_email(
             to=recipients,
             subject=rendered['title'],
             body=rendered['body'],
             html_body=html_body
         )
-    
+
     async def _send_slack_notification(
         self,
-        rendered: Dict[str, str],
-        channels: List[str],
+        rendered: dict[str, str],
+        channels: list[str],
         priority: NotificationPriority
     ) -> NotificationResult:
         """Send Slack notification."""
-        
+
         # Choose color based on priority
         color_map = {
             NotificationPriority.LOW: "#36a64f",      # green
@@ -562,25 +560,25 @@ class NotificationService:
             NotificationPriority.CRITICAL: "#f44336"  # red
         }
         color = color_map.get(priority, "#2196F3")
-        
+
         # Send to first channel (could be extended for multiple channels)
         channel = channels[0] if channels else None
-        
+
         return await self.slack_notifier.send_rich_message(
             title=rendered['title'],
             message=rendered['body'],
             color=color,
             channel=channel
         )
-    
+
     async def _send_discord_notification(
         self,
-        rendered: Dict[str, str],
-        webhooks: List[str],
+        rendered: dict[str, str],
+        webhooks: list[str],
         priority: NotificationPriority
     ) -> NotificationResult:
         """Send Discord notification."""
-        
+
         # Choose color based on priority
         color_map = {
             NotificationPriority.LOW: 0x4CAF50,      # green
@@ -589,24 +587,24 @@ class NotificationService:
             NotificationPriority.CRITICAL: 0xF44336  # red
         }
         color = color_map.get(priority, 0x2196F3)
-        
+
         return await self.discord_notifier.send_embed(
             title=rendered['title'],
             description=rendered['body'],
             color=color,
             footer_text="Agentic Startup Studio"
         )
-    
+
     async def send_idea_notification(
         self,
         idea_title: str,
         idea_description: str,
         category: str,
         creator: str,
-        recipients: Dict[NotificationChannel, List[str]]
-    ) -> List[NotificationResult]:
+        recipients: dict[NotificationChannel, list[str]]
+    ) -> list[NotificationResult]:
         """Send notification for new idea creation."""
-        
+
         return await self.send_notification(
             template_name='idea_created',
             channels=[NotificationChannel.EMAIL, NotificationChannel.SLACK],
@@ -619,19 +617,19 @@ class NotificationService:
                 'created_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S UTC')
             }
         )
-    
+
     async def send_validation_notification(
         self,
         idea_title: str,
         validation_score: float,
         confidence_level: str,
         next_steps: str,
-        recipients: Dict[NotificationChannel, List[str]]
-    ) -> List[NotificationResult]:
+        recipients: dict[NotificationChannel, list[str]]
+    ) -> list[NotificationResult]:
         """Send notification for idea validation completion."""
-        
+
         priority = NotificationPriority.HIGH if validation_score > 80 else NotificationPriority.NORMAL
-        
+
         return await self.send_notification(
             template_name='idea_validated',
             channels=[NotificationChannel.EMAIL, NotificationChannel.SLACK, NotificationChannel.DISCORD],
@@ -644,17 +642,17 @@ class NotificationService:
             },
             priority=priority
         )
-    
+
     async def send_error_alert(
         self,
         error_type: str,
         error_message: str,
         component: str,
         severity: str,
-        recipients: Dict[NotificationChannel, List[str]]
-    ) -> List[NotificationResult]:
+        recipients: dict[NotificationChannel, list[str]]
+    ) -> list[NotificationResult]:
         """Send error alert notification."""
-        
+
         priority_map = {
             'low': NotificationPriority.LOW,
             'medium': NotificationPriority.NORMAL,
@@ -662,7 +660,7 @@ class NotificationService:
             'critical': NotificationPriority.CRITICAL
         }
         priority = priority_map.get(severity.lower(), NotificationPriority.NORMAL)
-        
+
         return await self.send_notification(
             template_name='error_alert',
             channels=[NotificationChannel.SLACK, NotificationChannel.EMAIL],
@@ -676,16 +674,16 @@ class NotificationService:
             },
             priority=priority
         )
-    
-    def get_delivery_stats(self, hours: int = 24) -> Dict[str, Any]:
+
+    def get_delivery_stats(self, hours: int = 24) -> dict[str, Any]:
         """Get notification delivery statistics."""
-        
-        cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+
+        cutoff = datetime.now(UTC) - timedelta(hours=hours)
         recent_deliveries = [
             result for result in self.delivery_history
             if result.timestamp > cutoff
         ]
-        
+
         if not recent_deliveries:
             return {
                 'total_notifications': 0,
@@ -694,23 +692,23 @@ class NotificationService:
                 'success_rate': 0.0,
                 'by_channel': {}
             }
-        
+
         successful = len([r for r in recent_deliveries if r.success])
         failed = len([r for r in recent_deliveries if not r.success])
-        
+
         # Group by channel
         by_channel = {}
         for result in recent_deliveries:
             channel = result.channel.value
             if channel not in by_channel:
                 by_channel[channel] = {'total': 0, 'successful': 0, 'failed': 0}
-            
+
             by_channel[channel]['total'] += 1
             if result.success:
                 by_channel[channel]['successful'] += 1
             else:
                 by_channel[channel]['failed'] += 1
-        
+
         return {
             'total_notifications': len(recent_deliveries),
             'successful_deliveries': successful,
@@ -725,16 +723,16 @@ class NotificationService:
 
 async def test_notification_service():
     """Test function for notification service."""
-    
+
     notification_service = NotificationService()
-    
+
     # Test recipients
     recipients = {
         NotificationChannel.EMAIL: ['admin@terragonlabs.com'],
         NotificationChannel.SLACK: ['#general'],
         NotificationChannel.DISCORD: ['general']
     }
-    
+
     try:
         # Test idea notification
         results = await notification_service.send_idea_notification(
@@ -744,15 +742,15 @@ async def test_notification_service():
             creator="John Doe",
             recipients=recipients
         )
-        
+
         print(f"Sent {len(results)} notifications")
         for result in results:
             print(f"  {result.channel.value}: {'✓' if result.success else '✗'}")
-        
+
         # Get delivery stats
         stats = notification_service.get_delivery_stats()
         print(f"\nDelivery stats: {stats}")
-        
+
     except Exception as e:
         print(f"Test failed: {e}")
 

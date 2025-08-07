@@ -13,46 +13,45 @@ import os
 import warnings
 from abc import ABC, abstractmethod
 from functools import lru_cache
-from typing import Any, Dict, Optional, List
 
 logger = logging.getLogger(__name__)
 
 
 class SecretsProvider(ABC):
     """Abstract base class for secrets providers."""
-    
+
     @abstractmethod
-    def get_secret(self, secret_name: str) -> Optional[str]:
+    def get_secret(self, secret_name: str) -> str | None:
         """Retrieve a secret value."""
         pass
-    
+
     @abstractmethod
-    def get_multiple_secrets(self, secret_names: List[str]) -> Dict[str, Optional[str]]:
+    def get_multiple_secrets(self, secret_names: list[str]) -> dict[str, str | None]:
         """Retrieve multiple secret values."""
         pass
 
 
 class EnvironmentSecretsProvider(SecretsProvider):
     """Local development secrets provider using environment variables."""
-    
-    def get_secret(self, secret_name: str) -> Optional[str]:
+
+    def get_secret(self, secret_name: str) -> str | None:
         """Get secret from environment variables."""
         return os.getenv(secret_name)
-    
-    def get_multiple_secrets(self, secret_names: List[str]) -> Dict[str, Optional[str]]:
+
+    def get_multiple_secrets(self, secret_names: list[str]) -> dict[str, str | None]:
         """Get multiple secrets from environment variables."""
         return {name: os.getenv(name) for name in secret_names}
 
 
 class GoogleCloudSecretsProvider(SecretsProvider):
     """Production secrets provider using Google Cloud Secret Manager."""
-    
-    def __init__(self, project_id: Optional[str] = None):
+
+    def __init__(self, project_id: str | None = None):
         """Initialize Google Cloud Secret Manager client."""
         self.project_id = project_id or os.getenv('GOOGLE_CLOUD_PROJECT')
         if not self.project_id:
             raise ValueError("GOOGLE_CLOUD_PROJECT environment variable is required for Google Cloud secrets")
-        
+
         try:
             from google.cloud import secretmanager
             self.client = secretmanager.SecretManagerServiceClient()
@@ -61,8 +60,8 @@ class GoogleCloudSecretsProvider(SecretsProvider):
                 "google-cloud-secret-manager is required for production secrets management. "
                 "Install with: pip install google-cloud-secret-manager"
             ) from e
-    
-    def get_secret(self, secret_name: str) -> Optional[str]:
+
+    def get_secret(self, secret_name: str) -> str | None:
         """Get secret from Google Cloud Secret Manager."""
         try:
             secret_path = f"projects/{self.project_id}/secrets/{secret_name}/versions/latest"
@@ -72,8 +71,8 @@ class GoogleCloudSecretsProvider(SecretsProvider):
             logger.warning(f"Failed to retrieve secret '{secret_name}' from Google Cloud: {e}")
             # Fallback to environment variable
             return os.getenv(secret_name)
-    
-    def get_multiple_secrets(self, secret_names: List[str]) -> Dict[str, Optional[str]]:
+
+    def get_multiple_secrets(self, secret_names: list[str]) -> dict[str, str | None]:
         """Get multiple secrets from Google Cloud Secret Manager."""
         results = {}
         for secret_name in secret_names:
@@ -83,17 +82,17 @@ class GoogleCloudSecretsProvider(SecretsProvider):
 
 class SecretsManager:
     """Centralized secrets management with multiple provider support."""
-    
+
     def __init__(self, environment: str = "development"):
         """Initialize secrets manager with appropriate provider."""
         self.environment = environment
         self.provider = self._get_provider()
-        
+
         # Cache for secrets to avoid repeated API calls
-        self._secret_cache: Dict[str, str] = {}
-        
+        self._secret_cache: dict[str, str] = {}
+
         logger.info(f"Initialized secrets manager for environment: {environment}")
-    
+
     def _get_provider(self) -> SecretsProvider:
         """Select appropriate secrets provider based on environment."""
         if self.environment == "production":
@@ -105,8 +104,8 @@ class SecretsManager:
                 return EnvironmentSecretsProvider()
         else:
             return EnvironmentSecretsProvider()
-    
-    def get_secret(self, secret_name: str, required: bool = False) -> Optional[str]:
+
+    def get_secret(self, secret_name: str, required: bool = False) -> str | None:
         """
         Get a secret value with caching.
         
@@ -123,19 +122,19 @@ class SecretsManager:
         # Check cache first
         if secret_name in self._secret_cache:
             return self._secret_cache[secret_name]
-        
+
         # Retrieve from provider
         secret_value = self.provider.get_secret(secret_name)
-        
+
         if secret_value is None and required:
             raise ValueError(f"Required secret '{secret_name}' not found")
-        
+
         # Cache the result (even if None to avoid repeated failed lookups)
         if secret_value is not None:
             self._secret_cache[secret_name] = secret_value
-        
+
         return secret_value
-    
+
     def get_database_url(self) -> str:
         """Get database connection URL with secrets."""
         db_host = self.get_secret("DB_HOST") or "localhost"
@@ -143,33 +142,31 @@ class SecretsManager:
         db_name = self.get_secret("DB_NAME") or "startup_studio"
         db_user = self.get_secret("DB_USER") or "postgres"
         db_password = self.get_secret("DB_PASSWORD", required=self.environment == "production")
-        
+
         if db_password:
             return f"postgresql://{db_user}:{db_password}@{db_host}:{db_port}/{db_name}"
-        else:
-            return f"postgresql://{db_user}@{db_host}:{db_port}/{db_name}"
-    
+        return f"postgresql://{db_user}@{db_host}:{db_port}/{db_name}"
+
     def get_openai_api_key(self) -> str:
         """Get OpenAI API key."""
         api_key = self.get_secret("OPENAI_API_KEY", required=True)
         return api_key
-    
+
     def get_app_secret_key(self) -> str:
         """Get application secret key for sessions/JWT."""
         secret_key = self.get_secret("SECRET_KEY", required=self.environment == "production")
         if not secret_key:
             if self.environment == "production":
                 raise ValueError("SECRET_KEY is required for production")
-            else:
-                # Generate a warning for development
-                warnings.warn(
-                    "SECRET_KEY not set - using insecure default for development only",
-                    UserWarning
-                )
-                return "dev-secret-key-not-for-production"
+            # Generate a warning for development
+            warnings.warn(
+                "SECRET_KEY not set - using insecure default for development only",
+                UserWarning
+            )
+            return "dev-secret-key-not-for-production"
         return secret_key
-    
-    def validate_required_secrets(self) -> List[str]:
+
+    def validate_required_secrets(self) -> list[str]:
         """
         Validate that all required secrets are available.
         
@@ -181,21 +178,21 @@ class SecretsManager:
             "DB_PASSWORD",
             "OPENAI_API_KEY"
         ]
-        
+
         missing_secrets = []
         for secret_name in required_secrets:
             if self.get_secret(secret_name) is None:
                 missing_secrets.append(secret_name)
-        
+
         return missing_secrets
-    
+
     def clear_cache(self):
         """Clear the secrets cache (useful for testing or refreshing)."""
         self._secret_cache.clear()
         logger.debug("Secrets cache cleared")
 
 
-@lru_cache()
+@lru_cache
 def get_secrets_manager(environment: str = None) -> SecretsManager:
     """
     Get singleton secrets manager instance.
@@ -206,7 +203,7 @@ def get_secrets_manager(environment: str = None) -> SecretsManager:
     """
     if environment is None:
         environment = os.getenv("ENVIRONMENT", "development")
-    
+
     return SecretsManager(environment)
 
 
@@ -223,7 +220,7 @@ def setup_secrets_from_file(secrets_file: str = ".env.secrets"):
     if not os.path.exists(secrets_file):
         logger.warning(f"Secrets file {secrets_file} not found")
         return
-    
+
     try:
         from dotenv import load_dotenv
         load_dotenv(secrets_file)
@@ -248,7 +245,7 @@ def mask_secret(secret: str, visible_chars: int = 4) -> str:
     """
     if not secret or len(secret) <= visible_chars:
         return "*" * len(secret) if secret else ""
-    
+
     return "*" * (len(secret) - visible_chars) + secret[-visible_chars:]
 
 
@@ -265,6 +262,6 @@ def validate_secret_format(secret: str, min_length: int = 8) -> bool:
     """
     if not secret or len(secret) < min_length:
         return False
-    
+
     # Add more validation rules as needed
     return True

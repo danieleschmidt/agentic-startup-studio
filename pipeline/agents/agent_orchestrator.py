@@ -7,15 +7,19 @@ for CEO, CTO, VC, Angel, and Growth roles throughout the startup pipeline.
 
 import asyncio
 import logging
-import json
-from datetime import datetime, timezone
-from typing import Dict, List, Optional, Any, Type, Union, Callable
-from dataclasses import dataclass, field, asdict
-from enum import Enum
 from abc import ABC, abstractmethod
+from dataclasses import asdict, dataclass, field
+from datetime import UTC, datetime
+from enum import Enum
+from typing import Any
 
 from pipeline.config.settings import get_settings
-from pipeline.events.event_bus import get_event_bus, EventType, DomainEvent, EventHandler
+from pipeline.events.event_bus import (
+    DomainEvent,
+    EventHandler,
+    EventType,
+    get_event_bus,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -23,7 +27,7 @@ logger = logging.getLogger(__name__)
 class AgentRole(Enum):
     """Specialized agent roles in the startup pipeline."""
     CEO = "ceo"
-    CTO = "cto" 
+    CTO = "cto"
     VP_RD = "vp_rd"
     VC = "vc"
     ANGEL = "angel"
@@ -65,31 +69,31 @@ class AgentContext:
     startup_idea: str
     aggregate_id: str
     correlation_id: str
-    
+
     # State data
-    state_data: Dict[str, Any] = field(default_factory=dict)
-    
+    state_data: dict[str, Any] = field(default_factory=dict)
+
     # Agent communication
-    agent_messages: List[Dict[str, Any]] = field(default_factory=list)
-    
+    agent_messages: list[dict[str, Any]] = field(default_factory=list)
+
     # Execution metadata
     execution_id: str = ""
-    timestamp: datetime = field(default_factory=lambda: datetime.now(timezone.utc))
-    
+    timestamp: datetime = field(default_factory=lambda: datetime.now(UTC))
+
     # Budget and constraints
     budget_remaining: float = 0.0
     max_execution_time: int = 3600  # seconds
-    
-    def add_message(self, from_agent: AgentRole, to_agent: AgentRole, content: Dict[str, Any]) -> None:
+
+    def add_message(self, from_agent: AgentRole, to_agent: AgentRole, content: dict[str, Any]) -> None:
         """Add inter-agent communication message."""
         self.agent_messages.append({
             'from': from_agent.value,
             'to': to_agent.value,
             'content': content,
-            'timestamp': datetime.now(timezone.utc).isoformat()
+            'timestamp': datetime.now(UTC).isoformat()
         })
-    
-    def get_messages_for_agent(self, agent_role: AgentRole) -> List[Dict[str, Any]]:
+
+    def get_messages_for_agent(self, agent_role: AgentRole) -> list[dict[str, Any]]:
         """Get messages directed to a specific agent."""
         return [
             msg for msg in self.agent_messages
@@ -102,19 +106,19 @@ class AgentDecision:
     """Decision output from an agent."""
     agent_role: AgentRole
     decision_type: str
-    decision_data: Dict[str, Any]
+    decision_data: dict[str, Any]
     confidence_score: float
     reasoning: str
-    
+
     # Next state recommendation
-    next_state: Optional[WorkflowState] = None
-    required_agents: List[AgentRole] = field(default_factory=list)
-    
+    next_state: WorkflowState | None = None
+    required_agents: list[AgentRole] = field(default_factory=list)
+
     # Quality metrics
     execution_time: float = 0.0
     cost_estimate: float = 0.0
-    
-    def to_dict(self) -> Dict[str, Any]:
+
+    def to_dict(self) -> dict[str, Any]:
         """Convert decision to dictionary."""
         decision_dict = asdict(self)
         decision_dict['agent_role'] = self.agent_role.value
@@ -126,47 +130,47 @@ class AgentDecision:
 
 class BaseAgent(ABC):
     """Abstract base class for specialized agents."""
-    
-    def __init__(self, role: AgentRole, capabilities: List[AgentCapability]):
+
+    def __init__(self, role: AgentRole, capabilities: list[AgentCapability]):
         self.role = role
         self.capabilities = capabilities
         self.settings = get_settings()
         self.logger = logging.getLogger(f"{__name__}.{role.value}")
-        
+
         # Agent state
         self.active = True
         self.last_execution = None
         self.execution_count = 0
         self.total_cost = 0.0
-    
+
     @abstractmethod
     async def execute(self, context: AgentContext) -> AgentDecision:
         """Execute agent logic and return decision."""
         pass
-    
+
     @abstractmethod
     def can_handle_state(self, state: WorkflowState) -> bool:
         """Check if agent can handle the given workflow state."""
         pass
-    
+
     async def validate_input(self, context: AgentContext) -> bool:
         """Validate input context before execution."""
         if not context.startup_idea:
             self.logger.error("Missing startup idea in context")
             return False
-        
+
         if not context.aggregate_id:
             self.logger.error("Missing aggregate ID in context")
             return False
-        
+
         return True
-    
+
     async def update_metrics(self, execution_time: float, cost: float) -> None:
         """Update agent execution metrics."""
         self.execution_count += 1
         self.total_cost += cost
-        self.last_execution = datetime.now(timezone.utc)
-        
+        self.last_execution = datetime.now(UTC)
+
         self.logger.debug(
             f"Agent {self.role.value} metrics updated",
             extra={
@@ -179,7 +183,7 @@ class BaseAgent(ABC):
 
 class CEOAgent(BaseAgent):
     """CEO Agent - Strategic vision and business validation."""
-    
+
     def __init__(self):
         super().__init__(
             role=AgentRole.CEO,
@@ -189,7 +193,7 @@ class CEOAgent(BaseAgent):
                 AgentCapability.INVESTMENT_ANALYSIS
             ]
         )
-    
+
     def can_handle_state(self, state: WorkflowState) -> bool:
         """CEO handles strategic states."""
         return state in [
@@ -197,11 +201,11 @@ class CEOAgent(BaseAgent):
             WorkflowState.VALIDATE,
             WorkflowState.INVESTOR_EVALUATION
         ]
-    
+
     async def execute(self, context: AgentContext) -> AgentDecision:
         """Execute CEO strategic decision-making."""
         start_time = asyncio.get_event_loop().time()
-        
+
         if not await self.validate_input(context):
             return AgentDecision(
                 agent_role=self.role,
@@ -210,35 +214,35 @@ class CEOAgent(BaseAgent):
                 confidence_score=0.0,
                 reasoning="Input validation failed"
             )
-        
+
         self.logger.info(f"CEO analyzing startup idea: {context.startup_idea[:100]}...")
-        
+
         # Strategic analysis based on current state
         if context.current_state == WorkflowState.IDEATE:
             decision_data = await self._analyze_idea_feasibility(context)
             next_state = WorkflowState.VALIDATE
             required_agents = [AgentRole.CTO, AgentRole.VP_RD]
-            
+
         elif context.current_state == WorkflowState.VALIDATE:
             decision_data = await self._validate_market_opportunity(context)
             next_state = WorkflowState.RESEARCH
             required_agents = [AgentRole.GROWTH]
-            
+
         elif context.current_state == WorkflowState.INVESTOR_EVALUATION:
             decision_data = await self._evaluate_investment_readiness(context)
             next_state = WorkflowState.SMOKE_TEST
             required_agents = [AgentRole.GROWTH, AgentRole.CTO]
-            
+
         else:
             decision_data = {"error": "Unsupported state for CEO agent"}
             next_state = None
             required_agents = []
-        
+
         execution_time = asyncio.get_event_loop().time() - start_time
         cost_estimate = 0.15  # Estimated GPT-4 cost
-        
+
         await self.update_metrics(execution_time, cost_estimate)
-        
+
         return AgentDecision(
             agent_role=self.role,
             decision_type="strategic_analysis",
@@ -250,8 +254,8 @@ class CEOAgent(BaseAgent):
             execution_time=execution_time,
             cost_estimate=cost_estimate
         )
-    
-    async def _analyze_idea_feasibility(self, context: AgentContext) -> Dict[str, Any]:
+
+    async def _analyze_idea_feasibility(self, context: AgentContext) -> dict[str, Any]:
         """Analyze startup idea feasibility from CEO perspective."""
         # Simulated CEO analysis - in real implementation would use LLM
         return {
@@ -264,8 +268,8 @@ class CEOAgent(BaseAgent):
             'key_risks': ['market timing', 'competition'],
             'success_factors': ['execution speed', 'product-market fit']
         }
-    
-    async def _validate_market_opportunity(self, context: AgentContext) -> Dict[str, Any]:
+
+    async def _validate_market_opportunity(self, context: AgentContext) -> dict[str, Any]:
         """Validate market opportunity and timing."""
         return {
             'market_timing': 'optimal',
@@ -276,8 +280,8 @@ class CEOAgent(BaseAgent):
             'go_to_market_strategy': 'direct sales + digital marketing',
             'revenue_projection': '6-month break-even possible'
         }
-    
-    async def _evaluate_investment_readiness(self, context: AgentContext) -> Dict[str, Any]:
+
+    async def _evaluate_investment_readiness(self, context: AgentContext) -> dict[str, Any]:
         """Evaluate readiness for investment."""
         return {
             'funding_readiness': 'high',
@@ -292,7 +296,7 @@ class CEOAgent(BaseAgent):
 
 class CTOAgent(BaseAgent):
     """CTO Agent - Technical architecture and implementation."""
-    
+
     def __init__(self):
         super().__init__(
             role=AgentRole.CTO,
@@ -302,7 +306,7 @@ class CTOAgent(BaseAgent):
                 AgentCapability.PRODUCT_DEVELOPMENT
             ]
         )
-    
+
     def can_handle_state(self, state: WorkflowState) -> bool:
         """CTO handles technical states."""
         return state in [
@@ -310,11 +314,11 @@ class CTOAgent(BaseAgent):
             WorkflowState.MVP_GENERATION,
             WorkflowState.DEPLOYMENT
         ]
-    
+
     async def execute(self, context: AgentContext) -> AgentDecision:
         """Execute CTO technical decision-making."""
         start_time = asyncio.get_event_loop().time()
-        
+
         if not await self.validate_input(context):
             return AgentDecision(
                 agent_role=self.role,
@@ -323,35 +327,35 @@ class CTOAgent(BaseAgent):
                 confidence_score=0.0,
                 reasoning="Input validation failed"
             )
-        
+
         self.logger.info(f"CTO analyzing technical requirements for: {context.startup_idea[:100]}...")
-        
+
         # Technical analysis based on current state
         if context.current_state == WorkflowState.VALIDATE:
             decision_data = await self._analyze_technical_feasibility(context)
             next_state = WorkflowState.RESEARCH
             required_agents = [AgentRole.VP_RD]
-            
+
         elif context.current_state == WorkflowState.MVP_GENERATION:
             decision_data = await self._design_mvp_architecture(context)
             next_state = WorkflowState.DEPLOYMENT
             required_agents = [AgentRole.VP_RD]
-            
+
         elif context.current_state == WorkflowState.DEPLOYMENT:
             decision_data = await self._plan_deployment_strategy(context)
             next_state = WorkflowState.COMPLETED
             required_agents = []
-            
+
         else:
             decision_data = {"error": "Unsupported state for CTO agent"}
             next_state = None
             required_agents = []
-        
+
         execution_time = asyncio.get_event_loop().time() - start_time
         cost_estimate = 0.12  # Estimated cost
-        
+
         await self.update_metrics(execution_time, cost_estimate)
-        
+
         return AgentDecision(
             agent_role=self.role,
             decision_type="technical_analysis",
@@ -363,8 +367,8 @@ class CTOAgent(BaseAgent):
             execution_time=execution_time,
             cost_estimate=cost_estimate
         )
-    
-    async def _analyze_technical_feasibility(self, context: AgentContext) -> Dict[str, Any]:
+
+    async def _analyze_technical_feasibility(self, context: AgentContext) -> dict[str, Any]:
         """Analyze technical feasibility and architecture requirements."""
         return {
             'technical_complexity': 'medium',
@@ -377,8 +381,8 @@ class CTOAgent(BaseAgent):
             'key_technical_risks': ['third-party integrations', 'data volume'],
             'mitigation_strategies': ['phased rollout', 'performance monitoring']
         }
-    
-    async def _design_mvp_architecture(self, context: AgentContext) -> Dict[str, Any]:
+
+    async def _design_mvp_architecture(self, context: AgentContext) -> dict[str, Any]:
         """Design MVP architecture and implementation plan."""
         return {
             'architecture_pattern': 'microservices',
@@ -390,8 +394,8 @@ class CTOAgent(BaseAgent):
             'development_phases': ['core features', 'user interface', 'integrations'],
             'resource_requirements': '2-3 developers, 4-6 weeks'
         }
-    
-    async def _plan_deployment_strategy(self, context: AgentContext) -> Dict[str, Any]:
+
+    async def _plan_deployment_strategy(self, context: AgentContext) -> dict[str, Any]:
         """Plan deployment and infrastructure strategy."""
         return {
             'deployment_platform': 'fly.io',
@@ -408,7 +412,7 @@ class CTOAgent(BaseAgent):
 
 class VCAgent(BaseAgent):
     """VC Agent - Investment analysis and due diligence."""
-    
+
     def __init__(self):
         super().__init__(
             role=AgentRole.VC,
@@ -418,18 +422,18 @@ class VCAgent(BaseAgent):
                 AgentCapability.MARKET_RESEARCH
             ]
         )
-    
+
     def can_handle_state(self, state: WorkflowState) -> bool:
         """VC handles investment-related states."""
         return state in [
             WorkflowState.INVESTOR_EVALUATION,
             WorkflowState.DECK_GENERATION
         ]
-    
+
     async def execute(self, context: AgentContext) -> AgentDecision:
         """Execute VC investment analysis."""
         start_time = asyncio.get_event_loop().time()
-        
+
         if not await self.validate_input(context):
             return AgentDecision(
                 agent_role=self.role,
@@ -438,29 +442,29 @@ class VCAgent(BaseAgent):
                 confidence_score=0.0,
                 reasoning="Input validation failed"
             )
-        
+
         self.logger.info(f"VC evaluating investment opportunity: {context.startup_idea[:100]}...")
-        
+
         if context.current_state == WorkflowState.INVESTOR_EVALUATION:
             decision_data = await self._evaluate_investment_opportunity(context)
             next_state = WorkflowState.DECK_GENERATION
             required_agents = [AgentRole.CEO]
-            
+
         elif context.current_state == WorkflowState.DECK_GENERATION:
             decision_data = await self._review_pitch_deck_requirements(context)
             next_state = WorkflowState.SMOKE_TEST
             required_agents = [AgentRole.GROWTH]
-            
+
         else:
             decision_data = {"error": "Unsupported state for VC agent"}
             next_state = None
             required_agents = []
-        
+
         execution_time = asyncio.get_event_loop().time() - start_time
         cost_estimate = 0.10
-        
+
         await self.update_metrics(execution_time, cost_estimate)
-        
+
         return AgentDecision(
             agent_role=self.role,
             decision_type="investment_analysis",
@@ -472,8 +476,8 @@ class VCAgent(BaseAgent):
             execution_time=execution_time,
             cost_estimate=cost_estimate
         )
-    
-    async def _evaluate_investment_opportunity(self, context: AgentContext) -> Dict[str, Any]:
+
+    async def _evaluate_investment_opportunity(self, context: AgentContext) -> dict[str, Any]:
         """Evaluate investment opportunity from VC perspective."""
         return {
             'investment_thesis': 'strong market opportunity with experienced team',
@@ -486,13 +490,13 @@ class VCAgent(BaseAgent):
             'risk_factors': ['market timing', 'execution risk', 'competition'],
             'investment_recommendation': 'proceed with due diligence'
         }
-    
-    async def _review_pitch_deck_requirements(self, context: AgentContext) -> Dict[str, Any]:
+
+    async def _review_pitch_deck_requirements(self, context: AgentContext) -> dict[str, Any]:
         """Review and specify pitch deck requirements."""
         return {
             'key_slides_required': [
                 'problem_statement',
-                'solution_overview', 
+                'solution_overview',
                 'market_opportunity',
                 'business_model',
                 'traction',
@@ -514,8 +518,8 @@ class StateTransition:
     """Workflow state transition configuration."""
     from_state: WorkflowState
     to_state: WorkflowState
-    required_agents: List[AgentRole]
-    conditions: Dict[str, Any] = field(default_factory=dict)
+    required_agents: list[AgentRole]
+    conditions: dict[str, Any] = field(default_factory=dict)
     timeout_seconds: int = 300
 
 
@@ -526,20 +530,20 @@ class AgentOrchestrator(EventHandler):
     Manages LangGraph state machine, agent coordination, and event-driven
     transitions between workflow states.
     """
-    
+
     def __init__(self):
         self.settings = get_settings()
         self.logger = logging.getLogger(__name__)
         self.event_bus = get_event_bus()
-        
+
         # Agent registry
-        self.agents: Dict[AgentRole, BaseAgent] = {}
+        self.agents: dict[AgentRole, BaseAgent] = {}
         self._initialize_agents()
-        
+
         # Workflow state management
-        self.active_workflows: Dict[str, AgentContext] = {}  # aggregate_id -> context
+        self.active_workflows: dict[str, AgentContext] = {}  # aggregate_id -> context
         self.state_transitions = self._initialize_state_machine()
-        
+
         # Execution tracking
         self.execution_metrics = {
             'total_workflows': 0,
@@ -548,7 +552,7 @@ class AgentOrchestrator(EventHandler):
             'average_execution_time': 0.0,
             'total_cost': 0.0
         }
-        
+
         # Subscribe to relevant events
         self.event_bus.subscribe([
             EventType.IDEA_CREATED,
@@ -558,9 +562,9 @@ class AgentOrchestrator(EventHandler):
             EventType.OUTPUT_COMPLETE,
             EventType.WORKFLOW_STATE_CHANGED
         ], self)
-    
+
     @property
-    def handled_events(self) -> List[EventType]:
+    def handled_events(self) -> list[EventType]:
         """Events handled by the orchestrator."""
         return [
             EventType.IDEA_CREATED,
@@ -570,21 +574,21 @@ class AgentOrchestrator(EventHandler):
             EventType.OUTPUT_COMPLETE,
             EventType.WORKFLOW_STATE_CHANGED
         ]
-    
+
     def _initialize_agents(self) -> None:
         """Initialize all specialized agents."""
         self.agents[AgentRole.CEO] = CEOAgent()
         self.agents[AgentRole.CTO] = CTOAgent()
         self.agents[AgentRole.VC] = VCAgent()
-        
+
         # Additional agents would be initialized here
         # self.agents[AgentRole.ANGEL] = AngelAgent()
         # self.agents[AgentRole.GROWTH] = GrowthAgent()
         # self.agents[AgentRole.VP_RD] = VPRDAgent()
-        
+
         self.logger.info(f"Initialized {len(self.agents)} specialized agents")
-    
-    def _initialize_state_machine(self) -> List[StateTransition]:
+
+    def _initialize_state_machine(self) -> list[StateTransition]:
         """Initialize the LangGraph state machine transitions."""
         return [
             StateTransition(
@@ -636,7 +640,7 @@ class AgentOrchestrator(EventHandler):
                 conditions={'deployment_success': True}
             )
         ]
-    
+
     async def handle(self, event: DomainEvent) -> None:
         """Handle domain events and trigger workflow transitions."""
         try:
@@ -648,14 +652,14 @@ class AgentOrchestrator(EventHandler):
                     'correlation_id': event.correlation_id
                 }
             )
-            
+
             if event.event_type == EventType.IDEA_CREATED:
                 await self._start_workflow(event)
             elif event.event_type == EventType.WORKFLOW_STATE_CHANGED:
                 await self._handle_state_change(event)
             else:
                 await self._process_workflow_event(event)
-                
+
         except Exception as e:
             self.logger.error(
                 f"Error handling event {event.event_type.value}: {e}",
@@ -665,16 +669,16 @@ class AgentOrchestrator(EventHandler):
                     'error': str(e)
                 }
             )
-    
+
     async def _start_workflow(self, event: DomainEvent) -> None:
         """Start a new workflow for a startup idea."""
         aggregate_id = event.aggregate_id
         startup_idea = event.event_data.get('idea', '')
-        
+
         if not startup_idea:
             self.logger.error(f"No startup idea found in event {event.event_id}")
             return
-        
+
         # Create workflow context
         context = AgentContext(
             current_state=WorkflowState.IDEATE,
@@ -684,11 +688,11 @@ class AgentOrchestrator(EventHandler):
             execution_id=f"workflow_{aggregate_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}",
             budget_remaining=60.0  # Total budget from settings
         )
-        
+
         # Store active workflow
         self.active_workflows[aggregate_id] = context
         self.execution_metrics['total_workflows'] += 1
-        
+
         self.logger.info(
             f"Started workflow for idea: {startup_idea[:100]}...",
             extra={
@@ -697,10 +701,10 @@ class AgentOrchestrator(EventHandler):
                 'initial_state': context.current_state.value
             }
         )
-        
+
         # Execute initial state
         await self._execute_workflow_state(context)
-    
+
     async def _execute_workflow_state(self, context: AgentContext) -> None:
         """Execute the current workflow state with appropriate agents."""
         try:
@@ -709,7 +713,7 @@ class AgentOrchestrator(EventHandler):
                 agent for agent in self.agents.values()
                 if agent.can_handle_state(context.current_state) and agent.active
             ]
-            
+
             if not available_agents:
                 self.logger.warning(
                     f"No agents available for state {context.current_state.value}",
@@ -717,14 +721,14 @@ class AgentOrchestrator(EventHandler):
                 )
                 await self._transition_to_failed_state(context, "No available agents")
                 return
-            
+
             # Execute agents in parallel or sequence based on state requirements
             agent_decisions = []
             for agent in available_agents:
                 try:
                     decision = await agent.execute(context)
                     agent_decisions.append(decision)
-                    
+
                     self.logger.info(
                         f"Agent {agent.role.value} completed execution",
                         extra={
@@ -734,42 +738,42 @@ class AgentOrchestrator(EventHandler):
                             'cost': decision.cost_estimate
                         }
                     )
-                    
+
                 except Exception as e:
                     self.logger.error(
                         f"Agent {agent.role.value} execution failed: {e}",
                         extra={'aggregate_id': context.aggregate_id}
                     )
-            
+
             # Process agent decisions and determine next state
             if agent_decisions:
                 await self._process_agent_decisions(context, agent_decisions)
             else:
                 await self._transition_to_failed_state(context, "All agent executions failed")
-                
+
         except Exception as e:
             self.logger.error(
                 f"Workflow state execution failed: {e}",
                 extra={'aggregate_id': context.aggregate_id}
             )
             await self._transition_to_failed_state(context, str(e))
-    
+
     async def _process_agent_decisions(
         self,
         context: AgentContext,
-        decisions: List[AgentDecision]
+        decisions: list[AgentDecision]
     ) -> None:
         """Process agent decisions and determine workflow progression."""
-        
+
         # Aggregate decisions and determine consensus
         consensus_next_state = self._determine_consensus_next_state(decisions)
         confidence_scores = [d.confidence_score for d in decisions]
         avg_confidence = sum(confidence_scores) / len(confidence_scores)
-        
+
         # Update context with decision data
         for decision in decisions:
             context.state_data[f"{decision.agent_role.value}_decision"] = decision.to_dict()
-        
+
         # Check transition conditions
         if consensus_next_state and avg_confidence >= 0.7:
             await self._transition_to_state(context, consensus_next_state)
@@ -788,27 +792,27 @@ class AgentOrchestrator(EventHandler):
                     context,
                     f"Failed to reach consensus after retries (confidence: {avg_confidence:.2f})"
                 )
-    
-    def _determine_consensus_next_state(self, decisions: List[AgentDecision]) -> Optional[WorkflowState]:
+
+    def _determine_consensus_next_state(self, decisions: list[AgentDecision]) -> WorkflowState | None:
         """Determine consensus next state from agent decisions."""
         next_states = [d.next_state for d in decisions if d.next_state]
-        
+
         if not next_states:
             return None
-        
+
         # Simple majority vote
         state_counts = {}
         for state in next_states:
             state_counts[state] = state_counts.get(state, 0) + 1
-        
+
         return max(state_counts.items(), key=lambda x: x[1])[0]
-    
+
     async def _transition_to_state(self, context: AgentContext, new_state: WorkflowState) -> None:
         """Transition workflow to a new state."""
         old_state = context.current_state
         context.current_state = new_state
-        context.timestamp = datetime.now(timezone.utc)
-        
+        context.timestamp = datetime.now(UTC)
+
         # Publish state change event
         await self.event_bus.publish(DomainEvent(
             event_type=EventType.WORKFLOW_STATE_CHANGED,
@@ -821,7 +825,7 @@ class AgentOrchestrator(EventHandler):
                 'timestamp': context.timestamp.isoformat()
             }
         ))
-        
+
         self.logger.info(
             f"Workflow transitioned: {old_state.value} -> {new_state.value}",
             extra={
@@ -829,20 +833,20 @@ class AgentOrchestrator(EventHandler):
                 'execution_id': context.execution_id
             }
         )
-        
+
         # Execute new state if not completed
         if new_state not in [WorkflowState.COMPLETED, WorkflowState.FAILED]:
             await self._execute_workflow_state(context)
         else:
             await self._complete_workflow(context)
-    
+
     async def _transition_to_failed_state(self, context: AgentContext, reason: str) -> None:
         """Transition workflow to failed state."""
         context.current_state = WorkflowState.FAILED
         context.state_data['failure_reason'] = reason
-        
+
         self.execution_metrics['failed_workflows'] += 1
-        
+
         # Publish failure event
         await self.event_bus.publish(DomainEvent(
             event_type=EventType.PIPELINE_FAILED,
@@ -854,7 +858,7 @@ class AgentOrchestrator(EventHandler):
                 'final_state': context.current_state.value
             }
         ))
-        
+
         self.logger.error(
             f"Workflow failed: {reason}",
             extra={
@@ -862,18 +866,18 @@ class AgentOrchestrator(EventHandler):
                 'execution_id': context.execution_id
             }
         )
-        
+
         # Clean up
         if context.aggregate_id in self.active_workflows:
             del self.active_workflows[context.aggregate_id]
-    
+
     async def _complete_workflow(self, context: AgentContext) -> None:
         """Complete workflow execution."""
         self.execution_metrics['completed_workflows'] += 1
-        
+
         # Calculate execution metrics
-        execution_time = (datetime.now(timezone.utc) - context.timestamp).total_seconds()
-        
+        execution_time = (datetime.now(UTC) - context.timestamp).total_seconds()
+
         # Publish completion event
         await self.event_bus.publish(DomainEvent(
             event_type=EventType.OUTPUT_COMPLETE,
@@ -886,30 +890,30 @@ class AgentOrchestrator(EventHandler):
                 'agent_decisions': context.state_data
             }
         ))
-        
+
         self.logger.info(
-            f"Workflow completed successfully",
+            "Workflow completed successfully",
             extra={
                 'aggregate_id': context.aggregate_id,
                 'execution_id': context.execution_id,
                 'execution_time': execution_time
             }
         )
-        
+
         # Clean up
         if context.aggregate_id in self.active_workflows:
             del self.active_workflows[context.aggregate_id]
-    
+
     async def _handle_state_change(self, event: DomainEvent) -> None:
         """Handle workflow state change events."""
         aggregate_id = event.aggregate_id
         if aggregate_id not in self.active_workflows:
             self.logger.warning(f"Received state change for unknown workflow: {aggregate_id}")
             return
-        
+
         context = self.active_workflows[aggregate_id]
         new_state_value = event.event_data.get('new_state')
-        
+
         if new_state_value:
             try:
                 new_state = WorkflowState(new_state_value)
@@ -918,32 +922,32 @@ class AgentOrchestrator(EventHandler):
                     await self._execute_workflow_state(context)
             except ValueError:
                 self.logger.error(f"Invalid workflow state: {new_state_value}")
-    
+
     async def _process_workflow_event(self, event: DomainEvent) -> None:
         """Process workflow-related events."""
         aggregate_id = event.aggregate_id
         if aggregate_id not in self.active_workflows:
             return
-        
+
         context = self.active_workflows[aggregate_id]
-        
+
         # Update context with event data
         context.state_data[f"event_{event.event_type.value}"] = event.event_data
-        
+
         # Check if event triggers state transition
         if event.event_type == EventType.PROCESSING_COMPLETE:
             if context.current_state == WorkflowState.RESEARCH:
                 await self._transition_to_state(context, WorkflowState.DECK_GENERATION)
-        
+
         elif event.event_type == EventType.TRANSFORMATION_COMPLETE:
             if context.current_state == WorkflowState.DECK_GENERATION:
                 await self._transition_to_state(context, WorkflowState.INVESTOR_EVALUATION)
-    
-    async def get_workflow_status(self, aggregate_id: str) -> Optional[Dict[str, Any]]:
+
+    async def get_workflow_status(self, aggregate_id: str) -> dict[str, Any] | None:
         """Get current workflow status."""
         if aggregate_id not in self.active_workflows:
             return None
-        
+
         context = self.active_workflows[aggregate_id]
         return {
             'aggregate_id': aggregate_id,
@@ -955,8 +959,8 @@ class AgentOrchestrator(EventHandler):
             'state_data_keys': list(context.state_data.keys()),
             'timestamp': context.timestamp.isoformat()
         }
-    
-    async def get_orchestrator_metrics(self) -> Dict[str, Any]:
+
+    async def get_orchestrator_metrics(self) -> dict[str, Any]:
         """Get orchestrator performance metrics."""
         return {
             **self.execution_metrics,
@@ -967,7 +971,7 @@ class AgentOrchestrator(EventHandler):
 
 
 # Singleton instance
-_agent_orchestrator: Optional[AgentOrchestrator] = None
+_agent_orchestrator: AgentOrchestrator | None = None
 
 
 def get_agent_orchestrator() -> AgentOrchestrator:

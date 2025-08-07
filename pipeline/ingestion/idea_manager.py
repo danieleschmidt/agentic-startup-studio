@@ -5,23 +5,25 @@ This module coordinates validation, deduplication, storage, and business
 logic for the complete idea lifecycle management.
 """
 
-import asyncio
 import logging
 from datetime import datetime
-from typing import List, Optional, Dict, Any, Tuple
+from typing import Any
 from uuid import UUID, uuid4
 
-from pipeline.models.idea import (
-    Idea, IdeaDraft, IdeaStatus, PipelineStage, IdeaSummary,
-    QueryParams, ValidationResult, DuplicateCheckResult
-)
-from pipeline.config.settings import get_validation_config, ValidationConfig
-from pipeline.ingestion.validators import IdeaValidator, create_validator
-from pipeline.storage.idea_repository import IdeaRepository, create_idea_repository
-from pipeline.ingestion.duplicate_detector import CacheableDuplicateDetector
+from pipeline.config.settings import ValidationConfig, get_validation_config
 from pipeline.ingestion.cache.cache_manager import CacheManager
+from pipeline.ingestion.duplicate_detector import CacheableDuplicateDetector
 from pipeline.ingestion.monitoring.metrics_collector import MetricsCollector
 from pipeline.ingestion.monitoring.performance_monitor import PerformanceMonitor
+from pipeline.ingestion.validators import IdeaValidator, create_validator
+from pipeline.models.idea import (
+    Idea,
+    IdeaStatus,
+    IdeaSummary,
+    PipelineStage,
+    QueryParams,
+)
+from pipeline.storage.idea_repository import IdeaRepository, create_idea_repository
 
 logger = logging.getLogger(__name__)
 
@@ -48,16 +50,16 @@ class StorageError(IdeaManagementError):
 
 class IdeaLifecycleManager:
     """Manages idea lifecycle operations and state transitions."""
-    
+
     def __init__(self, repository: IdeaRepository):
         self.repository = repository
-    
+
     async def advance_idea_stage(
-        self, 
-        idea_id: UUID, 
+        self,
+        idea_id: UUID,
         next_stage: PipelineStage,
-        user_id: Optional[str] = None,
-        correlation_id: Optional[str] = None
+        user_id: str | None = None,
+        correlation_id: str | None = None
     ) -> bool:
         """
         Advance idea to next pipeline stage.
@@ -78,21 +80,21 @@ class IdeaLifecycleManager:
             idea = await self.repository.find_by_id(idea_id)
             if not idea:
                 raise IdeaManagementError(f"Idea {idea_id} not found")
-            
+
             # Validate stage transition
             if not self._is_valid_stage_transition(idea.current_stage, next_stage):
                 raise IdeaManagementError(
                     f"Invalid stage transition from {idea.current_stage} to {next_stage}"
                 )
-            
+
             # Update idea
             idea.advance_stage(next_stage)
-            
+
             # Update status based on stage
             idea.status = self._get_status_for_stage(next_stage)
-            
+
             await self.repository.update_idea(idea, user_id, correlation_id)
-            
+
             logger.info(
                 f"Idea {idea_id} advanced to stage {next_stage}",
                 extra={
@@ -102,18 +104,18 @@ class IdeaLifecycleManager:
                     "correlation_id": correlation_id
                 }
             )
-            
+
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to advance idea {idea_id} to stage {next_stage}: {e}")
             raise IdeaManagementError(f"Stage advancement failed: {e}")
-    
+
     async def update_stage_progress(
-        self, 
-        idea_id: UUID, 
+        self,
+        idea_id: UUID,
         progress: float,
-        user_id: Optional[str] = None
+        user_id: str | None = None
     ) -> bool:
         """
         Update progress within current stage.
@@ -130,17 +132,17 @@ class IdeaLifecycleManager:
             idea = await self.repository.find_by_id(idea_id)
             if not idea:
                 raise IdeaManagementError(f"Idea {idea_id} not found")
-            
+
             idea.update_progress(progress)
             await self.repository.update_idea(idea, user_id)
-            
+
             logger.debug(f"Updated progress for idea {idea_id} to {progress}")
             return True
-            
+
         except Exception as e:
             logger.error(f"Failed to update progress for idea {idea_id}: {e}")
             raise IdeaManagementError(f"Progress update failed: {e}")
-    
+
     def _is_valid_stage_transition(self, current: PipelineStage, next_stage: PipelineStage) -> bool:
         """Validate if stage transition is allowed."""
         # Define valid stage progressions
@@ -153,9 +155,9 @@ class IdeaLifecycleManager:
             PipelineStage.SMOKE_TEST: [PipelineStage.COMPLETE, PipelineStage.MVP],
             PipelineStage.COMPLETE: []  # Terminal stage
         }
-        
+
         return next_stage in valid_transitions.get(current, [])
-    
+
     def _get_status_for_stage(self, stage: PipelineStage) -> IdeaStatus:
         """Get appropriate status for pipeline stage."""
         status_mapping = {
@@ -167,26 +169,26 @@ class IdeaLifecycleManager:
             PipelineStage.SMOKE_TEST: IdeaStatus.TESTING,
             PipelineStage.COMPLETE: IdeaStatus.DEPLOYED
         }
-        
+
         return status_mapping.get(stage, IdeaStatus.DRAFT)
 
 
 class IdeaManager:
     """Main idea management orchestrator with integrated caching and monitoring."""
-    
+
     def __init__(
         self,
         repository: IdeaRepository,
         validator: IdeaValidator,
         config: ValidationConfig,
-        cache_manager: Optional[CacheManager] = None,
-        metrics_collector: Optional[MetricsCollector] = None,
-        performance_monitor: Optional[PerformanceMonitor] = None
+        cache_manager: CacheManager | None = None,
+        metrics_collector: MetricsCollector | None = None,
+        performance_monitor: PerformanceMonitor | None = None
     ):
         self.repository = repository
         self.validator = validator
         self.config = config
-        
+
         # Initialize monitoring components
         self.cache_manager = cache_manager or CacheManager()
         self.metrics_collector = metrics_collector or MetricsCollector()
@@ -194,7 +196,7 @@ class IdeaManager:
             metrics_collector=self.metrics_collector,
             cache_hit_rate_threshold=0.8
         )
-        
+
         # Initialize optimized duplicate detector with caching and monitoring
         self.duplicate_detector = CacheableDuplicateDetector(
             repository=repository,
@@ -203,14 +205,14 @@ class IdeaManager:
             config=config
         )
         self.lifecycle_manager = IdeaLifecycleManager(repository)
-    
+
     async def create_idea(
-        self, 
-        raw_data: Dict[str, Any], 
+        self,
+        raw_data: dict[str, Any],
         force_create: bool = False,
-        user_id: Optional[str] = None,
-        correlation_id: Optional[str] = None
-    ) -> Tuple[UUID, List[str]]:
+        user_id: str | None = None,
+        correlation_id: str | None = None
+    ) -> tuple[UUID, list[str]]:
         """
         Complete idea creation workflow with validation and duplicate detection.
         
@@ -229,27 +231,27 @@ class IdeaManager:
             StorageError: If storage fails
         """
         correlation_id = correlation_id or str(uuid4())
-        
+
         try:
             logger.info(
-                f"Starting idea creation workflow",
+                "Starting idea creation workflow",
                 extra={
                     "user_id": user_id,
                     "correlation_id": correlation_id,
                     "force_create": force_create
                 }
             )
-            
+
             # Step 1: Validate and sanitize input
             draft, validation_result = self.validator.validate_and_sanitize_draft(raw_data)
-            
+
             if not validation_result.is_valid:
                 raise ValidationError(f"Validation failed: {'; '.join(validation_result.errors)}")
-            
+
             # Step 2: Check for duplicates
             if not force_create:
                 duplicate_result = await self.duplicate_detector.check_for_duplicates(draft)
-                
+
                 if duplicate_result.found_similar:
                     similar_info = []
                     if duplicate_result.exact_matches:
@@ -257,12 +259,12 @@ class IdeaManager:
                     if duplicate_result.similar_ideas:
                         max_score = max(duplicate_result.similarity_scores.values()) if duplicate_result.similarity_scores else 0
                         similar_info.append(f"Similar ideas: {len(duplicate_result.similar_ideas)} (max similarity: {max_score:.2f})")
-                    
+
                     raise DuplicateIdeaError(
                         f"Similar ideas found: {'; '.join(similar_info)}. "
                         f"Use force_create=True to override."
                     )
-            
+
             # Step 3: Create and save idea
             idea = Idea(
                 title=draft.title,
@@ -274,11 +276,11 @@ class IdeaManager:
                 evidence_links=draft.evidence_links,
                 created_by=user_id
             )
-            
+
             idea_id = await self.repository.save_idea(idea, correlation_id)
-            
+
             logger.info(
-                f"Idea created successfully",
+                "Idea created successfully",
                 extra={
                     "idea_id": str(idea_id),
                     "title": idea.title,
@@ -287,16 +289,16 @@ class IdeaManager:
                     "validation_warnings": len(validation_result.warnings)
                 }
             )
-            
+
             return idea_id, validation_result.warnings
-            
+
         except (ValidationError, DuplicateIdeaError):
             raise
         except Exception as e:
             logger.error(f"Idea creation failed: {e}", extra={"correlation_id": correlation_id})
             raise StorageError(f"Failed to create idea: {e}")
-    
-    async def get_idea(self, idea_id: UUID) -> Optional[Idea]:
+
+    async def get_idea(self, idea_id: UUID) -> Idea | None:
         """
         Retrieve idea by ID.
         
@@ -311,12 +313,12 @@ class IdeaManager:
         except Exception as e:
             logger.error(f"Failed to retrieve idea {idea_id}: {e}")
             raise IdeaManagementError(f"Failed to retrieve idea: {e}")
-    
+
     async def list_ideas(
-        self, 
-        filters: Optional[QueryParams] = None,
-        user_id: Optional[str] = None
-    ) -> List[IdeaSummary]:
+        self,
+        filters: QueryParams | None = None,
+        user_id: str | None = None
+    ) -> list[IdeaSummary]:
         """
         List ideas with filtering and pagination.
         
@@ -329,9 +331,9 @@ class IdeaManager:
         """
         try:
             filters = filters or QueryParams()
-            
+
             ideas = await self.repository.find_with_filters(filters)
-            
+
             # Convert to summaries
             summaries = []
             for idea in ideas:
@@ -345,20 +347,20 @@ class IdeaManager:
                     progress=progress
                 )
                 summaries.append(summary)
-            
+
             logger.debug(f"Listed {len(summaries)} ideas", extra={"user_id": user_id})
             return summaries
-            
+
         except Exception as e:
             logger.error(f"Failed to list ideas: {e}")
             raise IdeaManagementError(f"Failed to list ideas: {e}")
-    
+
     async def update_idea(
-        self, 
-        idea_id: UUID, 
-        updates: Dict[str, Any],
-        user_id: Optional[str] = None,
-        correlation_id: Optional[str] = None
+        self,
+        idea_id: UUID,
+        updates: dict[str, Any],
+        user_id: str | None = None,
+        correlation_id: str | None = None
     ) -> bool:
         """
         Update existing idea with validation.
@@ -381,28 +383,28 @@ class IdeaManager:
             existing_idea = await self.repository.find_by_id(idea_id)
             if not existing_idea:
                 raise IdeaManagementError(f"Idea {idea_id} not found")
-            
+
             # Check if idea is in a modifiable state
             locked_statuses = [IdeaStatus.DEPLOYED, IdeaStatus.ARCHIVED]
             if existing_idea.status in locked_statuses:
                 raise IdeaManagementError(
                     f"Cannot modify idea in status: {existing_idea.status}"
                 )
-            
+
             # Validate updates
             validation_result = self.validator.validate_partial_update(existing_idea, updates)
             if not validation_result.is_valid:
                 raise ValidationError(f"Update validation failed: {'; '.join(validation_result.errors)}")
-            
+
             # Apply updates
             for field, value in updates.items():
                 if hasattr(existing_idea, field):
                     setattr(existing_idea, field, value)
-            
+
             existing_idea.updated_at = datetime.utcnow()
-            
+
             await self.repository.update_idea(existing_idea, user_id, correlation_id)
-            
+
             logger.info(
                 f"Idea {idea_id} updated successfully",
                 extra={
@@ -412,19 +414,19 @@ class IdeaManager:
                     "correlation_id": correlation_id
                 }
             )
-            
+
             return True
-            
+
         except ValidationError:
             raise
         except Exception as e:
             logger.error(f"Failed to update idea {idea_id}: {e}")
             raise IdeaManagementError(f"Failed to update idea: {e}")
-    
+
     async def delete_idea(
-        self, 
+        self,
         idea_id: UUID,
-        user_id: Optional[str] = None
+        user_id: str | None = None
     ) -> bool:
         """
         Delete idea by ID.
@@ -438,22 +440,22 @@ class IdeaManager:
         """
         try:
             result = await self.repository.delete_idea(idea_id, user_id)
-            
+
             if result:
                 logger.info(f"Idea {idea_id} deleted", extra={"user_id": user_id})
-            
+
             return result
-            
+
         except Exception as e:
             logger.error(f"Failed to delete idea {idea_id}: {e}")
             raise IdeaManagementError(f"Failed to delete idea: {e}")
-    
+
     async def advance_stage(
-        self, 
-        idea_id: UUID, 
+        self,
+        idea_id: UUID,
         next_stage: PipelineStage,
-        user_id: Optional[str] = None,
-        correlation_id: Optional[str] = None
+        user_id: str | None = None,
+        correlation_id: str | None = None
     ) -> bool:
         """
         Advance idea to next pipeline stage.
@@ -470,12 +472,12 @@ class IdeaManager:
         return await self.lifecycle_manager.advance_idea_stage(
             idea_id, next_stage, user_id, correlation_id
         )
-    
+
     async def get_similar_ideas(
-        self, 
-        idea_id: UUID, 
+        self,
+        idea_id: UUID,
         limit: int = 5
-    ) -> List[Tuple[UUID, float]]:
+    ) -> list[tuple[UUID, float]]:
         """
         Find ideas similar to the given idea.
         
@@ -490,25 +492,25 @@ class IdeaManager:
             idea = await self.repository.find_by_id(idea_id)
             if not idea:
                 return []
-            
+
             similar = await self.repository.find_similar_by_embedding(
                 description=idea.description,
                 threshold=0.5,  # Lower threshold for similarity search
                 limit=limit + 1  # +1 to exclude the idea itself
             )
-            
+
             # Filter out the original idea
             filtered_similar = [
-                (uid, score) for uid, score in similar 
+                (uid, score) for uid, score in similar
                 if uid != idea_id
             ]
-            
+
             return filtered_similar[:limit]
-            
+
         except Exception as e:
             logger.error(f"Failed to find similar ideas for {idea_id}: {e}")
             return []
-    
+
     def _calculate_overall_progress(self, idea: Idea) -> float:
         """Calculate overall progress across all pipeline stages."""
         # Define stage weights (could be configurable)
@@ -521,16 +523,16 @@ class IdeaManager:
             PipelineStage.SMOKE_TEST: 0.9,
             PipelineStage.COMPLETE: 1.0
         }
-        
+
         base_progress = stage_weights.get(idea.current_stage, 0.0)
         stage_contribution = idea.stage_progress * 0.1  # Current stage contributes 10%
-        
+
         return min(base_progress + stage_contribution, 1.0)
 
 
 # Factory function for easy instantiation
 async def create_idea_manager(
-    config: Optional[ValidationConfig] = None
+    config: ValidationConfig | None = None
 ) -> IdeaManager:
     """
     Create and initialize idea manager with dependencies.
@@ -542,9 +544,9 @@ async def create_idea_manager(
         Initialized IdeaManager instance
     """
     validation_config = config or get_validation_config()
-    
+
     # Initialize dependencies
     validator = create_validator(validation_config)
     repository = await create_idea_repository()
-    
+
     return IdeaManager(repository, validator, validation_config)

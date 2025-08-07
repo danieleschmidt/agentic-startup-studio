@@ -11,18 +11,18 @@ All routes require authentication through the API Gateway.
 """
 
 import logging
-from typing import List, Optional, Dict, Any
 from datetime import datetime
+from typing import Any
 
-from fastapi import APIRouter, HTTPException, status, Depends, BackgroundTasks
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, status
 from pydantic import BaseModel, Field
 
 from pipeline.api.gateway import gateway
+from pipeline.config.settings import get_settings
 from pipeline.models.idea import Idea
 from pipeline.services.campaign_generator import CampaignGenerator
 from pipeline.services.pitch_deck_generator import PitchDeckGenerator
 from pipeline.storage.idea_repository import IdeaRepository
-from pipeline.config.settings import get_settings
 
 logger = logging.getLogger(__name__)
 
@@ -39,7 +39,7 @@ class IdeaSubmissionRequest(BaseModel):
     problem_statement: str = Field(..., min_length=20, max_length=2000)
     solution_description: str = Field(..., min_length=20, max_length=2000)
     target_market: str = Field(..., min_length=10, max_length=500)
-    evidence_links: List[str] = Field(default=[])
+    evidence_links: list[str] = Field(default=[])
 
 class IdeaResponse(BaseModel):
     """Response model for idea data."""
@@ -50,12 +50,12 @@ class IdeaResponse(BaseModel):
     status: str
     created_at: datetime
     updated_at: datetime
-    validation_score: Optional[float] = None
+    validation_score: float | None = None
 
 class PitchDeckRequest(BaseModel):
     """Request model for pitch deck generation."""
     idea_id: str
-    template: Optional[str] = "default"
+    template: str | None = "default"
     include_financials: bool = True
     include_competition: bool = True
 
@@ -73,7 +73,7 @@ class CampaignRequest(BaseModel):
     campaign_type: str  # "google_ads", "social_media", "email"
     budget: float
     duration_days: int = 30
-    target_audience: Optional[str] = None
+    target_audience: str | None = None
 
 class CampaignResponse(BaseModel):
     """Response model for campaign creation."""
@@ -85,7 +85,7 @@ class CampaignResponse(BaseModel):
     created_at: datetime
 
 # Dependency to get current authenticated user
-async def get_current_user(user: Dict[str, Any] = Depends(gateway.get_current_user)):
+async def get_current_user(user: dict[str, Any] = Depends(gateway.get_current_user)):
     """Get current authenticated user."""
     return user
 
@@ -101,7 +101,7 @@ campaign_generator = CampaignGenerator()
 async def submit_idea(
     idea_request: IdeaSubmissionRequest,
     background_tasks: BackgroundTasks,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: dict[str, Any] = Depends(get_current_user)
 ):
     """
     Submit a new startup idea for validation and processing.
@@ -119,22 +119,22 @@ async def submit_idea(
             target_market=idea_request.target_market,
             evidence_links=idea_request.evidence_links
         )
-        
+
         # Save idea
         saved_idea = await idea_repository.save_idea(idea)
-        
+
         # Schedule background processing
         background_tasks.add_task(process_idea_async, saved_idea.id)
-        
+
         logger.info(
-            f"Idea submitted successfully",
+            "Idea submitted successfully",
             extra={
                 "idea_id": saved_idea.id,
                 "user_session": user.get("session_id"),
                 "title": idea_request.title
             }
         )
-        
+
         return IdeaResponse(
             id=saved_idea.id,
             title=saved_idea.title,
@@ -144,7 +144,7 @@ async def submit_idea(
             created_at=saved_idea.created_at,
             updated_at=saved_idea.updated_at
         )
-        
+
     except Exception as e:
         logger.error(f"Failed to submit idea: {e}")
         raise HTTPException(
@@ -152,13 +152,13 @@ async def submit_idea(
             detail="Failed to submit idea"
         )
 
-@router.get("/ideas", response_model=List[IdeaResponse])
+@router.get("/ideas", response_model=list[IdeaResponse])
 async def list_ideas(
     limit: int = 50,
     offset: int = 0,
-    category: Optional[str] = None,
-    status_filter: Optional[str] = None,
-    user: Dict[str, Any] = Depends(get_current_user)
+    category: str | None = None,
+    status_filter: str | None = None,
+    user: dict[str, Any] = Depends(get_current_user)
 ):
     """
     List submitted ideas with filtering and pagination.
@@ -172,7 +172,7 @@ async def list_ideas(
             category=category,
             status=status_filter
         )
-        
+
         return [
             IdeaResponse(
                 id=idea.id,
@@ -186,7 +186,7 @@ async def list_ideas(
             )
             for idea in ideas
         ]
-        
+
     except Exception as e:
         logger.error(f"Failed to list ideas: {e}")
         raise HTTPException(
@@ -197,7 +197,7 @@ async def list_ideas(
 @router.get("/ideas/{idea_id}", response_model=IdeaResponse)
 async def get_idea(
     idea_id: str,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: dict[str, Any] = Depends(get_current_user)
 ):
     """
     Get details for a specific idea.
@@ -211,7 +211,7 @@ async def get_idea(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Idea not found"
             )
-        
+
         return IdeaResponse(
             id=idea.id,
             title=idea.title,
@@ -222,7 +222,7 @@ async def get_idea(
             updated_at=idea.updated_at,
             validation_score=getattr(idea, 'validation_score', None)
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -238,7 +238,7 @@ async def get_idea(
 async def generate_pitch_deck(
     pitch_request: PitchDeckRequest,
     background_tasks: BackgroundTasks,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: dict[str, Any] = Depends(get_current_user)
 ):
     """
     Generate a pitch deck for an idea.
@@ -253,10 +253,10 @@ async def generate_pitch_deck(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Idea not found"
             )
-        
+
         # Start deck generation
         deck_id = f"deck-{idea.id}-{int(datetime.utcnow().timestamp())}"
-        
+
         # Schedule background generation
         background_tasks.add_task(
             generate_deck_async,
@@ -266,16 +266,16 @@ async def generate_pitch_deck(
             pitch_request.include_financials,
             pitch_request.include_competition
         )
-        
+
         logger.info(
-            f"Pitch deck generation started",
+            "Pitch deck generation started",
             extra={
                 "deck_id": deck_id,
                 "idea_id": pitch_request.idea_id,
                 "user_session": user.get("session_id")
             }
         )
-        
+
         return PitchDeckResponse(
             deck_id=deck_id,
             idea_id=pitch_request.idea_id,
@@ -283,7 +283,7 @@ async def generate_pitch_deck(
             generated_at=datetime.utcnow(),
             status="generating"
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -296,7 +296,7 @@ async def generate_pitch_deck(
 @router.get("/pitch-decks/{deck_id}")
 async def get_pitch_deck(
     deck_id: str,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: dict[str, Any] = Depends(get_current_user)
 ):
     """
     Get pitch deck status and download link.
@@ -313,7 +313,7 @@ async def get_pitch_deck(
             "generated_at": datetime.utcnow(),
             "format": "pdf"
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to get pitch deck {deck_id}: {e}")
         raise HTTPException(
@@ -327,7 +327,7 @@ async def get_pitch_deck(
 async def create_campaign(
     campaign_request: CampaignRequest,
     background_tasks: BackgroundTasks,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: dict[str, Any] = Depends(get_current_user)
 ):
     """
     Create a marketing campaign for an idea.
@@ -342,17 +342,17 @@ async def create_campaign(
                 status_code=status.HTTP_404_NOT_FOUND,
                 detail="Idea not found"
             )
-        
+
         # Validate budget
         if campaign_request.budget <= 0:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Budget must be positive"
             )
-        
+
         # Create campaign
         campaign_id = f"campaign-{idea.id}-{int(datetime.utcnow().timestamp())}"
-        
+
         # Schedule background campaign setup
         background_tasks.add_task(
             create_campaign_async,
@@ -363,9 +363,9 @@ async def create_campaign(
             campaign_request.duration_days,
             campaign_request.target_audience
         )
-        
+
         logger.info(
-            f"Campaign creation started",
+            "Campaign creation started",
             extra={
                 "campaign_id": campaign_id,
                 "idea_id": campaign_request.idea_id,
@@ -374,7 +374,7 @@ async def create_campaign(
                 "user_session": user.get("session_id")
             }
         )
-        
+
         return CampaignResponse(
             campaign_id=campaign_id,
             idea_id=campaign_request.idea_id,
@@ -383,7 +383,7 @@ async def create_campaign(
             budget=campaign_request.budget,
             created_at=datetime.utcnow()
         )
-        
+
     except HTTPException:
         raise
     except Exception as e:
@@ -396,7 +396,7 @@ async def create_campaign(
 @router.get("/campaigns/{campaign_id}")
 async def get_campaign(
     campaign_id: str,
-    user: Dict[str, Any] = Depends(get_current_user)
+    user: dict[str, Any] = Depends(get_current_user)
 ):
     """
     Get campaign status and performance metrics.
@@ -419,7 +419,7 @@ async def get_campaign(
             },
             "updated_at": datetime.utcnow()
         }
-        
+
     except Exception as e:
         logger.error(f"Failed to get campaign {campaign_id}: {e}")
         raise HTTPException(
@@ -448,8 +448,8 @@ async def generate_deck_async(deck_id: str, idea_id: str, template: str, include
     except Exception as e:
         logger.error(f"Failed to generate deck {deck_id}: {e}")
 
-async def create_campaign_async(campaign_id: str, idea_id: str, campaign_type: str, budget: float, duration_days: int, target_audience: Optional[str]):
-    """Create marketing campaign asynchronously.""" 
+async def create_campaign_async(campaign_id: str, idea_id: str, campaign_type: str, budget: float, duration_days: int, target_audience: str | None):
+    """Create marketing campaign asynchronously."""
     try:
         logger.info(f"Starting campaign creation for {campaign_id}")
         # This would trigger actual campaign setup

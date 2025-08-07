@@ -22,16 +22,15 @@ from langgraph.graph import END, StateGraph
 from core.deck_generator import generate_deck_content
 from core.investor_scorer import load_investor_profile, score_pitch_with_rubric
 from pipeline.config.settings import get_settings
+from pipeline.models.idea import Idea
 from pipeline.services.budget_sentinel import (
     BudgetCategory,
     BudgetExceededException,
     get_budget_sentinel,
 )
 from pipeline.services.idea_analytics_service import (
-    IdeaAnalyticsService,
     create_analytics_service,
 )
-from pipeline.models.idea import Idea
 
 
 class PipelineStage(Enum):
@@ -358,13 +357,13 @@ class WorkflowOrchestrator:
 
         if gate_result == QualityGateResult.FAILED:
             return "error"
-        elif gate_result == QualityGateResult.PASSED or gate_result == QualityGateResult.BYPASSED:
+        if gate_result == QualityGateResult.PASSED or gate_result == QualityGateResult.BYPASSED:
             # Route to next stage
             if current_stage == PipelineStage.RESEARCH:
                 return "deck_generation"
-            elif current_stage == PipelineStage.DECK_GENERATION:
+            if current_stage == PipelineStage.DECK_GENERATION:
                 return "investor_evaluation"
-            elif current_stage == PipelineStage.INVESTOR_EVALUATION:
+            if current_stage == PipelineStage.INVESTOR_EVALUATION:
                 return "smoke_test"
 
         return "error"
@@ -373,8 +372,7 @@ class WorkflowOrchestrator:
         """Route based on error handler results."""
         if state["retry_count"] <= 3:
             return "retry"
-        else:
-            return "failed"
+        return "failed"
 
     # Placeholder stage processors (to be implemented)
     async def _process_ideate_stage(self, state: WorkflowState):
@@ -385,14 +383,14 @@ class WorkflowOrchestrator:
     async def _process_research_stage(self, state: WorkflowState):
         """Process research stage with enhanced analytics."""
         idea_data = state.get("idea_data", {})
-        
+
         # Create temporary Idea object for analytics
         temp_idea = Idea(
             title=idea_data.get("title", ""),
             description=idea_data.get("description", ""),
             category=idea_data.get("category", "uncategorized")
         )
-        
+
         # Simulate research data collection
         research_data = {
             "evidence_count": 3,
@@ -406,7 +404,7 @@ class WorkflowOrchestrator:
             },
             "sources": ["Industry Report 2025", "Market Research"]
         }
-        
+
         # Perform advanced analytics
         try:
             market_potential = await self.analytics_service.analyze_market_potential(
@@ -418,7 +416,7 @@ class WorkflowOrchestrator:
             funding_potential = await self.analytics_service.calculate_funding_potential(
                 temp_idea, market_potential, competitive_analysis
             )
-            
+
             # Store enhanced research data
             state["research_data"] = {
                 "evidence_count": research_data["evidence_count"],
@@ -428,18 +426,18 @@ class WorkflowOrchestrator:
                 "funding_potential": funding_potential.dict(),
                 "raw_research": research_data
             }
-            
+
             self.logger.info(
                 f"Enhanced research completed for {state['idea_id']} - "
                 f"Market Score: {market_potential.overall_score:.2f}, "
                 f"Funding Score: {funding_potential.overall_funding_score:.2f}"
             )
-            
+
         except Exception as e:
             self.logger.error(f"Enhanced research analysis failed: {e}")
             # Fallback to basic research data
             state["research_data"] = research_data
-        
+
         await asyncio.sleep(0.1)  # Simulate processing
 
     async def _process_deck_generation_stage(self, state: WorkflowState):
@@ -504,8 +502,7 @@ class WorkflowOrchestrator:
 
         if evidence_count >= 3 and quality_score >= 0.7:
             return QualityGateResult.PASSED
-        else:
-            return QualityGateResult.FAILED
+        return QualityGateResult.FAILED
 
     async def _validate_deck_quality_gate(self, state: WorkflowState) -> QualityGateResult:
         """Validate deck quality gate."""
@@ -515,8 +512,7 @@ class WorkflowOrchestrator:
 
         if slide_count == 10 and accessibility_score >= 90:
             return QualityGateResult.PASSED
-        else:
-            return QualityGateResult.FAILED
+        return QualityGateResult.FAILED
 
     async def _validate_investor_quality_gate(self, state: WorkflowState) -> QualityGateResult:
         """Validate investor quality gate."""
@@ -527,8 +523,7 @@ class WorkflowOrchestrator:
 
         if investor_score >= funding_threshold:
             return QualityGateResult.PASSED
-        else:
-            return QualityGateResult.FAILED
+        return QualityGateResult.FAILED
 
 
 # Singleton instance
