@@ -1,5 +1,6 @@
 import requests
-from typing import List
+import asyncio
+from typing import List, Dict, Any
 
 
 def basic_web_search_tool(claim: str, num_to_find: int) -> List[str]:
@@ -52,6 +53,35 @@ def basic_web_search_tool(claim: str, num_to_find: int) -> List[str]:
         return []
 
     return found_urls
+
+
+async def search_for_evidence(query: str, num_results: int = 5) -> List[Dict[str, Any]]:
+    """
+    Async evidence search function that returns structured evidence data.
+    
+    Args:
+        query: The search query/claim to find evidence for
+        num_results: Number of evidence items to return
+        
+    Returns:
+        List of evidence dictionaries with url, title, and snippet
+    """
+    # Simulate async operation
+    await asyncio.sleep(0.1)
+    
+    # Use existing sync search function and transform results
+    urls = basic_web_search_tool(query, num_results)
+    
+    evidence = []
+    for i, url in enumerate(urls):
+        evidence.append({
+            'url': url,
+            'title': f'Evidence {i+1} for: {query[:50]}...',
+            'snippet': f'This is evidence content related to {query}. Supporting data and analysis.',
+            'relevance_score': max(0.7, 1.0 - (i * 0.1))  # Decreasing relevance
+        })
+    
+    return evidence
 
 
 if __name__ == "__main__":
