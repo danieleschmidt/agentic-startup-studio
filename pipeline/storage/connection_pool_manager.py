@@ -17,7 +17,7 @@ import asyncpg
 from asyncpg import Connection, Pool
 
 from pipeline.config.settings import get_settings
-from pipeline.infrastructure.circuit_breaker import CircuitBreaker
+from pipeline.infrastructure.circuit_breaker import CircuitBreakerRegistry, CircuitBreakerConfig
 
 logger = logging.getLogger(__name__)
 
@@ -126,10 +126,12 @@ class ConnectionPoolManager:
         self.settings = get_settings()
         self.pool: Pool | None = None
         self.metrics = PoolHealthMetrics()
-        self.circuit_breaker = CircuitBreaker(
+        # Initialize circuit breaker for database connections
+        self.circuit_breaker_registry = CircuitBreakerRegistry()
+        self.db_circuit_breaker_config = CircuitBreakerConfig(
             failure_threshold=5,
-            timeout_seconds=30,
-            recovery_timeout=60
+            timeout=30.0,
+            recovery_timeout=60.0
         )
         self._health_check_task: asyncio.Task | None = None
         self._is_shutting_down = False
