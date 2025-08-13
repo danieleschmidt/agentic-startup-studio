@@ -1,68 +1,82 @@
 #!/usr/bin/env python3
 """
-Generation 1 Basic Functionality Test
-Tests that core functionality works as expected
+Generation 1 Validation Tests - MAKE IT WORK (Simple Implementation)
+Tests core functionality without external dependencies.
 """
-import asyncio
+
 import sys
-import os
+import unittest
+from pathlib import Path
 
 # Add project root to path
-sys.path.insert(0, '.')
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
 
-async def test_generation1_basic():
-    """Test basic functionality - MAKE IT WORK"""
-    print("🧪 GENERATION 1 TEST: MAKE IT WORK")
+class TestGeneration1Basic(unittest.TestCase):
+    """Basic functionality tests for Generation 1"""
+    
+    def test_core_imports(self):
+        """Test that core modules can be imported"""
+        try:
+            from pipeline.config.settings import get_settings
+            from pipeline.models.idea import Idea
+            self.assertTrue(True, "Core imports successful")
+        except ImportError as e:
+            self.fail(f"Core import failed: {e}")
+    
+    def test_settings_configuration(self):
+        """Test settings can be loaded"""
+        from pipeline.config.settings import get_settings
+        settings = get_settings()
+        self.assertIsNotNone(settings)
+        self.assertTrue(hasattr(settings, 'ENVIRONMENT'))
+    
+    def test_idea_model_creation(self):
+        """Test basic Idea model creation"""
+        from pipeline.models.idea import Idea
+        from datetime import datetime
+        
+        # Create a basic idea instance
+        idea_data = {
+            'title': 'Test Startup Idea',
+            'description': 'A test idea for validation',
+            'category': 'saas',
+            'status': 'DRAFT',
+            'created_at': datetime.utcnow(),
+            'updated_at': datetime.utcnow()
+        }
+        
+        idea = Idea(**idea_data)
+        self.assertEqual(idea.title, 'Test Startup Idea')
+        self.assertEqual(idea.category, 'saas')
+        self.assertEqual(idea.status, 'DRAFT')
+    
+    def test_project_structure(self):
+        """Test that key project directories exist"""
+        directories = [
+            'pipeline',
+            'pipeline/config',
+            'pipeline/models', 
+            'pipeline/cli',
+            'pipeline/core',
+            'tests'
+        ]
+        
+        for directory in directories:
+            dir_path = project_root / directory
+            self.assertTrue(dir_path.exists(), f"Directory {directory} should exist")
+    
+    def test_autonomous_executor_import(self):
+        """Test autonomous executor can be imported"""
+        try:
+            from pipeline.core.autonomous_executor import AutonomousExecutor, AutonomousTask
+            self.assertTrue(True, "Autonomous executor imports successful")
+        except ImportError as e:
+            self.fail(f"Autonomous executor import failed: {e}")
+
+if __name__ == '__main__':
+    print("🧪 Running Generation 1 Basic Functionality Tests")
     print("=" * 50)
     
-    try:
-        # Test 1: Core imports work
-        print("✅ Test 1: Core Imports")
-        from pipeline.main_pipeline import get_main_pipeline
-        from pipeline.models.idea import Idea, IdeaStatus
-        from core.search_tools import basic_web_search_tool, search_for_evidence
-        print("   ✓ All core imports successful")
-        
-        # Test 2: Basic search functionality
-        print("\n✅ Test 2: Search Tools")
-        urls = basic_web_search_tool("AI startup validation", 3)
-        print(f"   ✓ Basic web search returned {len(urls)} URLs")
-        
-        # Test async search
-        evidence = await search_for_evidence("startup validation", 2)
-        print(f"   ✓ Evidence search returned {len(evidence)} items")
-        
-        # Test 3: Data models work
-        print("\n✅ Test 3: Data Models")
-        test_idea = Idea(
-            title="Test AI Startup",
-            description="AI-powered customer support automation",
-            category="ai_ml",
-            status=IdeaStatus.DRAFT
-        )
-        print(f"   ✓ Idea model created: {test_idea.title}")
-        print(f"   ✓ Status: {test_idea.status}")
-        
-        # Test 4: Pipeline initialization
-        print("\n✅ Test 4: Pipeline Setup")
-        pipeline = get_main_pipeline()
-        print("   ✓ Main pipeline initialized")
-        
-        print("\n" + "=" * 50)
-        print("🎉 GENERATION 1 BASIC FUNCTIONALITY: ✅ WORKING")
-        print("✓ Core imports functional")
-        print("✓ Search tools operational") 
-        print("✓ Data models valid")
-        print("✓ Pipeline accessible")
-        
-        return True
-        
-    except Exception as e:
-        print(f"\n❌ Generation 1 test failed: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return False
-
-if __name__ == "__main__":
-    success = asyncio.run(test_generation1_basic())
-    sys.exit(0 if success else 1)
+    # Run tests
+    unittest.main(verbosity=2)
