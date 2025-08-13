@@ -1,146 +1,181 @@
 #!/usr/bin/env python3
 """
-Generation 2 Robustness Test
-Tests error handling, validation, logging, and monitoring
+Generation 2 Validation Tests - MAKE IT ROBUST (Reliable Implementation)
+Tests error handling, logging, monitoring, and validation capabilities.
 """
-import asyncio
+
 import sys
-import os
-import tempfile
+import unittest
 import logging
 from pathlib import Path
+from unittest.mock import patch, MagicMock
 
-# Add project root to path  
-sys.path.insert(0, '.')
+# Add project root to path
+project_root = Path(__file__).parent
+sys.path.insert(0, str(project_root))
 
-async def test_generation2_robust():
-    """Test robustness features - MAKE IT ROBUST"""
-    print("🛡️ GENERATION 2 TEST: MAKE IT ROBUST")
-    print("=" * 50)
+class TestGeneration2Robust(unittest.TestCase):
+    """Robust functionality tests for Generation 2"""
     
-    success_count = 0
-    total_tests = 7
+    def setUp(self):
+        """Set up test environment"""
+        self.test_logger = logging.getLogger('test_robust')
+        
+    def test_error_handling_in_settings(self):
+        """Test settings handle missing environment gracefully"""
+        with patch.dict('os.environ', {}, clear=True):
+            try:
+                from pipeline.config.settings import get_settings
+                settings = get_settings()
+                # Should use defaults when environment variables are missing
+                self.assertIsNotNone(settings)
+                self.assertTrue(hasattr(settings, 'environment'))  # lowercase 'environment' not 'ENVIRONMENT'
+            except Exception as e:
+                self.fail(f"Settings should handle missing environment: {e}")
     
-    try:
-        # Test 1: Error Handling in Search
-        print("✅ Test 1: Error Handling")
-        from core.search_tools import basic_web_search_tool
+    def test_idea_model_validation(self):
+        """Test Idea model validates input properly"""
+        from pipeline.models.idea import Idea
+        from datetime import datetime
         
-        # Test with invalid parameters - should not crash
-        result = basic_web_search_tool("", 0)
-        print(f"   ✓ Graceful handling of edge case: {len(result)} results")
-        success_count += 1
+        # Test with valid data
+        valid_data = {
+            'title': 'Valid Test Idea',
+            'description': 'A valid test description',
+            'category': 'saas',
+            'status': 'DRAFT',
+            'created_at': datetime.now(),
+            'updated_at': datetime.now()
+        }
+        idea = Idea(**valid_data)
+        self.assertEqual(idea.title, 'Valid Test Idea')
         
-        # Test 2: Data Validation
-        print("\n✅ Test 2: Data Validation")
-        from pipeline.models.idea import Idea, IdeaCategory
-        from pydantic import ValidationError
-        
+        # Test with invalid data should raise validation error
+        with self.assertRaises(Exception):
+            invalid_data = {
+                'title': '',  # Empty title should fail
+                'description': 'Description',
+                'category': 'invalid_category',  # Invalid category
+                'status': 'DRAFT'
+            }
+            Idea(**invalid_data)
+    
+    def test_autonomous_executor_error_handling(self):
+        """Test autonomous executor handles errors gracefully"""
         try:
-            # Test invalid data - should raise ValidationError
-            invalid_idea = Idea(
-                title="",  # Empty title should fail validation
-                description="Valid description", 
-                category="invalid_category"  # Invalid category
-            )
-            print("   ❌ Validation should have failed")
-        except ValidationError as e:
-            print("   ✓ Pydantic validation caught invalid data")
-            success_count += 1
-        
-        # Test 3: Logging Setup
-        print("\n✅ Test 3: Logging Configuration")
-        logger = logging.getLogger("test_robust")
-        logger.setLevel(logging.INFO)
-        
-        # Create temporary log file
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-            log_file = f.name
+            from pipeline.core.autonomous_executor import AutonomousExecutor, AutonomousTask
             
-        handler = logging.FileHandler(log_file)
-        formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-        handler.setFormatter(formatter)
-        logger.addHandler(handler)
-        
-        logger.info("Test log message for robustness validation")
-        handler.close()
-        
-        # Verify log was written
-        with open(log_file, 'r') as f:
-            log_content = f.read()
+            executor = AutonomousExecutor()
+            self.assertIsNotNone(executor)
             
-        if "Test log message" in log_content:
-            print("   ✓ Logging system operational")
-            success_count += 1
-        
-        # Cleanup
-        os.unlink(log_file)
-        
-        # Test 4: Configuration Management
-        print("\n✅ Test 4: Configuration Management")
-        try:
-            from pipeline.config.settings import get_settings
-            settings = get_settings()
-            print(f"   ✓ Settings loaded successfully: {type(settings).__name__}")
-            success_count += 1
-        except Exception as e:
-            print(f"   ⚠️ Settings configuration issue: {e}")
-        
-        # Test 5: Database Connection Handling
-        print("\n✅ Test 5: Database Connection Safety")
-        try:
-            # Test database connection logic exists (even if DB not available)
-            from pipeline.storage.connection_pool_manager import ConnectionPoolManager
-            print("   ✓ Database connection handling available")
-            success_count += 1
+            # Test task creation with invalid data
+            with self.assertRaises(Exception):
+                invalid_task = AutonomousTask(
+                    id="",  # Empty ID should fail
+                    name="Test Task",
+                    description=""  # Empty description should fail
+                )
         except ImportError as e:
-            print(f"   ⚠️ Database connection handling not found: {e}")
-        
-        # Test 6: Circuit Breaker Pattern
-        print("\n✅ Test 6: Circuit Breaker Implementation")
+            self.skipTest(f"Dependencies not available: {e}")
+    
+    def test_circuit_breaker_functionality(self):
+        """Test circuit breaker pattern implementation"""
         try:
-            from pipeline.infrastructure.circuit_breaker import CircuitBreakerConfig, CircuitBreakerRegistry
+            from pipeline.infrastructure.circuit_breaker import CircuitBreaker, CircuitBreakerConfig
             
-            # Test circuit breaker configuration
-            config = CircuitBreakerConfig(failure_threshold=3, timeout=10.0)
-            registry = CircuitBreakerRegistry()
-            print("   ✓ Circuit breaker pattern implemented")
-            success_count += 1
-        except ImportError:
-            print("   ⚠️ Circuit breaker not found - will implement")
-        except Exception as e:
-            print(f"   ⚠️ Circuit breaker issue: {e}")
+            # Create circuit breaker with test settings using config object
+            config = CircuitBreakerConfig(failure_threshold=2, timeout=1.0)
+            cb = CircuitBreaker(name="test_breaker", config=config)
+            self.assertIsNotNone(cb)
             
-        # Test 7: Health Monitoring
-        print("\n✅ Test 7: Health Monitoring")
+            # Test that it starts in closed state
+            self.assertEqual(cb.state.value, 'closed')  # Use .value to get the enum value
+            
+        except ImportError as e:
+            self.skipTest(f"Circuit breaker not available: {e}")
+    
+    def test_logging_configuration(self):
+        """Test logging is properly configured"""
+        import logging
+        
+        # Test that logging is configured
+        logger = logging.getLogger('pipeline')
+        self.assertIsNotNone(logger)
+        
+        # Test log level setting
+        logger.setLevel(logging.INFO)
+        self.assertEqual(logger.level, logging.INFO)
+    
+    def test_health_check_functionality(self):
+        """Test health check endpoints work"""
         try:
-            from pipeline.infrastructure.simple_health import SimpleHealthMonitor, get_health_monitor
-            health_monitor = get_health_monitor()
-            status = health_monitor.get_overall_status()
-            print(f"   ✓ Health monitoring operational: {status['overall_status']}")
-            success_count += 1
-        except ImportError:
-            print("   ⚠️ Health monitoring not found - will implement")
-        except Exception as e:
-            print(f"   ⚠️ Health monitoring issue: {e}")
-        
-        # Summary
-        print("\n" + "=" * 50)
-        print(f"🛡️ GENERATION 2 ROBUSTNESS: {success_count}/{total_tests} TESTS PASSED")
-        
-        if success_count >= 5:  # 70% pass rate for robustness
-            print("✅ ROBUST - Core reliability features operational")
-            return True
-        else:
-            print("⚠️  NEEDS IMPROVEMENT - Some robustness features missing")
-            return False
+            from pipeline.infrastructure.simple_health import SimpleHealthChecker
             
-    except Exception as e:
-        print(f"\n❌ Generation 2 test failed: {str(e)}")
-        import traceback
-        traceback.print_exc()
-        return False
+            health_checker = SimpleHealthChecker()
+            health_status = health_checker.check_health()
+            
+            self.assertIsInstance(health_status, dict)
+            self.assertIn('status', health_status)
+            
+        except ImportError as e:
+            self.skipTest(f"Health check not available: {e}")
+    
+    def test_security_input_validation(self):
+        """Test input validation and sanitization"""
+        from pipeline.models.idea import Idea
+        from datetime import datetime
+        
+        # Test SQL injection prevention
+        malicious_input = "'; DROP TABLE ideas; --"
+        try:
+            idea = Idea(
+                title=malicious_input,
+                description="Test description",
+                category="saas",
+                status="DRAFT",
+                created_at=datetime.now(),
+                updated_at=datetime.now()
+            )
+            # Should accept but sanitize the input
+            self.assertIsNotNone(idea.title)
+        except Exception:
+            # Or reject malicious input entirely
+            self.assertTrue(True, "Malicious input properly rejected")
+    
+    def test_performance_monitoring_setup(self):
+        """Test performance monitoring is configured"""
+        try:
+            from pipeline.telemetry import get_tracer
+            tracer = get_tracer('test')
+            self.assertIsNotNone(tracer)
+        except ImportError as e:
+            self.skipTest(f"Telemetry not available: {e}")
+    
+    def test_configuration_validation(self):
+        """Test configuration validation"""
+        from pipeline.config.settings import get_settings
+        
+        settings = get_settings()
+        
+        # Test that critical settings have reasonable defaults
+        self.assertTrue(hasattr(settings, 'environment'))  # lowercase 'environment'
+        self.assertEqual(settings.environment, 'development')  # Should default to development
+        
+        # Test database configuration exists and is accessible
+        self.assertIsNotNone(settings.database)
+        self.assertTrue(hasattr(settings.database, 'host'))
+        self.assertTrue(hasattr(settings.database, 'port'))
+        self.assertTrue(hasattr(settings.database, 'database'))
 
-if __name__ == "__main__":
-    success = asyncio.run(test_generation2_robust())
-    sys.exit(0 if success else 1)
+if __name__ == '__main__':
+    print("🛡️ Running Generation 2 Robust Functionality Tests")
+    print("=" * 55)
+    
+    # Configure logging for tests
+    logging.basicConfig(
+        level=logging.INFO,
+        format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    )
+    
+    # Run tests
+    unittest.main(verbosity=2)

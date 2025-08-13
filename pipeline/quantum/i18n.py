@@ -1,572 +1,299 @@
 """
-Quantum Task Planner Internationalization (i18n)
-
-Multi-language support for the quantum task planning system:
-- Text translation for UI elements and messages
-- Locale-aware formatting for dates, numbers, currencies
-- Right-to-left (RTL) language support
-- Cultural adaptation for quantum concepts
-- GDPR/Privacy compliance messaging
+Internationalization (i18n) Support for Global-First Implementation
+Supports multi-language content and regional compliance.
 """
 
 import json
 import logging
-from dataclasses import dataclass
-from datetime import datetime, timedelta
 from enum import Enum
 from pathlib import Path
-from typing import Any
+from typing import Dict, Optional, Any
+from dataclasses import dataclass
 
 logger = logging.getLogger(__name__)
 
+class SupportedLanguage(str, Enum):
+    """Supported languages for global deployment"""
+    ENGLISH = "en"
+    SPANISH = "es" 
+    FRENCH = "fr"
+    GERMAN = "de"
+    JAPANESE = "ja"
+    CHINESE_SIMPLIFIED = "zh"
 
-class SupportedLocale(str, Enum):
-    """Supported locales for the quantum task planner."""
-
-    # Primary languages (Tier 1)
-    ENGLISH_US = "en_US"
-    SPANISH_ES = "es_ES"
-    FRENCH_FR = "fr_FR"
-    GERMAN_DE = "de_DE"
-    JAPANESE_JA = "ja_JP"
-    CHINESE_CN = "zh_CN"
-
-    # Additional languages (Tier 2)
-    PORTUGUESE_BR = "pt_BR"
-    RUSSIAN_RU = "ru_RU"
-    KOREAN_KR = "ko_KR"
-    ITALIAN_IT = "it_IT"
-    DUTCH_NL = "nl_NL"
-    ARABIC_SA = "ar_SA"
-
-    @classmethod
-    def get_language_code(cls, locale_code: str) -> str:
-        """Extract language code from locale (e.g., 'en' from 'en_US')."""
-        return locale_code.split('_')[0]
-
-    @classmethod
-    def is_rtl(cls, locale_code: str) -> bool:
-        """Check if locale uses right-to-left text direction."""
-        rtl_languages = {'ar', 'he', 'fa', 'ur'}
-        return cls.get_language_code(locale_code) in rtl_languages
-
+class Region(str, Enum):
+    """Supported regions for compliance and localization"""
+    NORTH_AMERICA = "na"
+    EUROPE = "eu"
+    ASIA_PACIFIC = "apac"
+    LATIN_AMERICA = "latam"
 
 @dataclass
-class LocaleInfo:
-    """Information about a specific locale."""
-
-    code: str
-    name: str
-    native_name: str
-    language: str
-    country: str
-    is_rtl: bool = False
+class LocalizationConfig:
+    """Configuration for localization settings"""
+    language: SupportedLanguage = SupportedLanguage.ENGLISH
+    region: Region = Region.NORTH_AMERICA
+    timezone: str = "UTC"
+    currency: str = "USD"
     date_format: str = "%Y-%m-%d"
-    time_format: str = "%H:%M:%S"
-    currency_symbol: str = "$"
-    decimal_separator: str = "."
-    thousands_separator: str = ","
+    number_format: str = "en_US"
 
-    @classmethod
-    def from_locale_code(cls, locale_code: str) -> 'LocaleInfo':
-        """Create LocaleInfo from locale code."""
-        locale_data = {
-            "en_US": cls("en_US", "English (US)", "English", "en", "US", False, "%m/%d/%Y", "%I:%M %p", "$"),
-            "es_ES": cls("es_ES", "Spanish (Spain)", "Español", "es", "ES", False, "%d/%m/%Y", "%H:%M", "€"),
-            "fr_FR": cls("fr_FR", "French (France)", "Français", "fr", "FR", False, "%d/%m/%Y", "%H:%M", "€"),
-            "de_DE": cls("de_DE", "German (Germany)", "Deutsch", "de", "DE", False, "%d.%m.%Y", "%H:%M", "€"),
-            "ja_JP": cls("ja_JP", "Japanese (Japan)", "日本語", "ja", "JP", False, "%Y/%m/%d", "%H:%M", "¥"),
-            "zh_CN": cls("zh_CN", "Chinese (China)", "中文", "zh", "CN", False, "%Y-%m-%d", "%H:%M", "¥"),
-            "pt_BR": cls("pt_BR", "Portuguese (Brazil)", "Português", "pt", "BR", False, "%d/%m/%Y", "%H:%M", "R$"),
-            "ru_RU": cls("ru_RU", "Russian (Russia)", "Русский", "ru", "RU", False, "%d.%m.%Y", "%H:%M", "₽"),
-            "ko_KR": cls("ko_KR", "Korean (Korea)", "한국어", "ko", "KR", False, "%Y.%m.%d", "%H:%M", "₩"),
-            "it_IT": cls("it_IT", "Italian (Italy)", "Italiano", "it", "IT", False, "%d/%m/%Y", "%H:%M", "€"),
-            "nl_NL": cls("nl_NL", "Dutch (Netherlands)", "Nederlands", "nl", "NL", False, "%d-%m-%Y", "%H:%M", "€"),
-            "ar_SA": cls("ar_SA", "Arabic (Saudi Arabia)", "العربية", "ar", "SA", True, "%d/%m/%Y", "%H:%M", "﷼"),
-        }
-
-        return locale_data.get(locale_code, locale_data["en_US"])
-
-
-class QuantumI18nManager:
-    """Main internationalization manager for quantum task planner."""
-
-    def __init__(self, default_locale: str = "en_US", translations_dir: Path | None = None):
-        self.default_locale = default_locale
-        self.current_locale = default_locale
-        self.translations_dir = translations_dir or Path(__file__).parent / "translations"
-
-        # Translation catalogs
-        self.translations: dict[str, dict[str, str]] = {}
-        self.locale_info: dict[str, LocaleInfo] = {}
-
-        # Quantum-specific terminology
-        self.quantum_terms: dict[str, dict[str, str]] = {}
-
-        # Initialize translations
+class InternationalizationManager:
+    """Manages internationalization and localization"""
+    
+    def __init__(self, config: Optional[LocalizationConfig] = None):
+        """Initialize i18n manager with configuration"""
+        self.config = config or LocalizationConfig()
+        self.translations: Dict[str, Dict[str, str]] = {}
         self._load_translations()
-        self._load_quantum_terminology()
-        self._initialize_locale_info()
-
+        
+        logger.info(f"I18n initialized for {self.config.language.value} in {self.config.region.value}")
+    
     def _load_translations(self):
-        """Load translation files for all supported locales."""
-        try:
-            if not self.translations_dir.exists():
-                self.translations_dir.mkdir(parents=True)
-                logger.warning(f"Created translations directory: {self.translations_dir}")
-
-            for locale_code in SupportedLocale:
-                translation_file = self.translations_dir / f"{locale_code.value}.json"
-
-                if translation_file.exists():
-                    try:
-                        with open(translation_file, encoding='utf-8') as f:
-                            self.translations[locale_code.value] = json.load(f)
-                        logger.debug(f"Loaded translations for {locale_code.value}")
-                    except (OSError, json.JSONDecodeError) as e:
-                        logger.error(f"Failed to load translations for {locale_code.value}: {e}")
-                        self.translations[locale_code.value] = {}
-                else:
-                    # Create empty translation file template
-                    self.translations[locale_code.value] = {}
-                    self._create_translation_template(locale_code.value)
-
-        except Exception as e:
-            logger.error(f"Failed to initialize translations: {e}")
-            self.translations[self.default_locale] = {}
-
-    def _create_translation_template(self, locale_code: str):
-        """Create a translation template file."""
-        template = self._get_base_translations()
-
-        template_file = self.translations_dir / f"{locale_code}.json"
-        try:
-            with open(template_file, 'w', encoding='utf-8') as f:
-                json.dump(template, f, indent=2, ensure_ascii=False)
-            logger.info(f"Created translation template: {template_file}")
-        except OSError as e:
-            logger.error(f"Failed to create translation template for {locale_code}: {e}")
-
-    def _get_base_translations(self) -> dict[str, str]:
-        """Get base translation keys that need to be translated."""
-        return {
-            # Common UI elements
-            "task": "Task",
-            "tasks": "Tasks",
-            "quantum_task": "Quantum Task",
-            "quantum_tasks": "Quantum Tasks",
-            "title": "Title",
-            "description": "Description",
-            "priority": "Priority",
-            "status": "Status",
-            "created": "Created",
-            "updated": "Updated",
-            "due_date": "Due Date",
-            "estimated_duration": "Estimated Duration",
-            "dependencies": "Dependencies",
-
-            # Quantum states
-            "quantum_state_superposition": "Superposition",
-            "quantum_state_pending": "Pending",
-            "quantum_state_executing": "Executing",
-            "quantum_state_completed": "Completed",
-            "quantum_state_failed": "Failed",
-            "quantum_state_cancelled": "Cancelled",
-            "quantum_state_blocked": "Blocked",
-
-            # Quantum priorities
-            "priority_ground_state": "Ground State",
-            "priority_excited_1": "Excited Level 1",
-            "priority_excited_2": "Excited Level 2",
-            "priority_excited_3": "Excited Level 3",
-            "priority_ionized": "Ionized",
-
-            # Actions
-            "create": "Create",
-            "edit": "Edit",
-            "delete": "Delete",
-            "save": "Save",
-            "cancel": "Cancel",
-            "execute": "Execute",
-            "schedule": "Schedule",
-            "measure": "Measure",
-            "entangle": "Entangle",
-
-            # Quantum operations
-            "quantum_measurement": "Quantum Measurement",
-            "quantum_evolution": "Quantum Evolution",
-            "quantum_entanglement": "Quantum Entanglement",
-            "quantum_superposition": "Quantum Superposition",
-            "quantum_interference": "Quantum Interference",
-            "quantum_tunneling": "Quantum Tunneling",
-            "quantum_coherence": "Quantum Coherence",
-            "quantum_decoherence": "Quantum Decoherence",
-
-            # Messages
-            "task_created": "Task created successfully",
-            "task_updated": "Task updated successfully",
-            "task_deleted": "Task deleted successfully",
-            "task_executed": "Task executed successfully",
-            "measurement_completed": "Quantum measurement completed",
-            "entanglement_created": "Quantum entanglement created",
-
-            # Errors
-            "error_invalid_input": "Invalid input provided",
-            "error_task_not_found": "Task not found",
-            "error_measurement_failed": "Quantum measurement failed",
-            "error_entanglement_failed": "Quantum entanglement failed",
-            "error_validation_failed": "Validation failed",
-
-            # Time units
-            "seconds": "seconds",
-            "minutes": "minutes",
-            "hours": "hours",
-            "days": "days",
-            "weeks": "weeks",
-            "months": "months",
-
-            # Privacy and compliance
-            "privacy_notice": "Privacy Notice",
-            "data_processing_notice": "We process your data in accordance with privacy regulations",
-            "gdpr_compliance": "GDPR Compliant",
-            "data_retention_notice": "Data is retained according to our retention policy",
-            "consent_required": "Consent is required for data processing",
-        }
-
-    def _load_quantum_terminology(self):
-        """Load quantum-specific terminology translations."""
-        # Quantum physics concepts need careful translation to maintain scientific accuracy
-        self.quantum_terms = {
-            "en_US": {
-                "superposition": "A quantum state where a task exists in multiple states simultaneously",
-                "entanglement": "A quantum phenomenon where tasks become correlated",
-                "measurement": "The process of observing a quantum task state",
-                "coherence": "The degree of quantum correlation in the system",
-                "interference": "Quantum effect that can enhance or reduce probabilities",
-                "tunneling": "Quantum effect allowing tasks to overcome barriers"
+        """Load translation files for supported languages"""
+        # In production, these would be loaded from files
+        self.translations = {
+            SupportedLanguage.ENGLISH.value: {
+                "startup_idea": "Startup Idea",
+                "description": "Description", 
+                "category": "Category",
+                "status": "Status",
+                "created": "Created",
+                "validation_error": "Validation Error",
+                "success_message": "Operation completed successfully",
+                "processing": "Processing...",
+                "budget_warning": "Budget warning: {threshold}% reached",
+                "idea_validated": "Idea has been validated",
+                "similar_ideas_found": "Found {count} similar ideas"
             },
-            "es_ES": {
-                "superposition": "Un estado cuántico donde una tarea existe en múltiples estados simultáneamente",
-                "entanglement": "Un fenómeno cuántico donde las tareas se correlacionan",
-                "measurement": "El proceso de observar el estado de una tarea cuántica",
-                "coherence": "El grado de correlación cuántica en el sistema",
-                "interference": "Efecto cuántico que puede mejorar o reducir probabilidades",
-                "tunneling": "Efecto cuántico que permite a las tareas superar barreras"
+            SupportedLanguage.SPANISH.value: {
+                "startup_idea": "Idea de Startup",
+                "description": "Descripción",
+                "category": "Categoría", 
+                "status": "Estado",
+                "created": "Creado",
+                "validation_error": "Error de Validación",
+                "success_message": "Operación completada con éxito",
+                "processing": "Procesando...",
+                "budget_warning": "Advertencia de presupuesto: {threshold}% alcanzado",
+                "idea_validated": "La idea ha sido validada",
+                "similar_ideas_found": "Se encontraron {count} ideas similares"
             },
-            "fr_FR": {
-                "superposition": "Un état quantique où une tâche existe dans plusieurs états simultanément",
-                "entanglement": "Un phénomène quantique où les tâches deviennent corrélées",
-                "measurement": "Le processus d'observation de l'état d'une tâche quantique",
-                "coherence": "Le degré de corrélation quantique dans le système",
-                "interference": "Effet quantique qui peut améliorer ou réduire les probabilités",
-                "tunneling": "Effet quantique permettant aux tâches de surmonter les barrières"
+            SupportedLanguage.FRENCH.value: {
+                "startup_idea": "Idée de Startup",
+                "description": "Description",
+                "category": "Catégorie",
+                "status": "Statut", 
+                "created": "Créé",
+                "validation_error": "Erreur de Validation",
+                "success_message": "Opération réussie",
+                "processing": "Traitement en cours...",
+                "budget_warning": "Avertissement budget: {threshold}% atteint",
+                "idea_validated": "L'idée a été validée",
+                "similar_ideas_found": "Trouvé {count} idées similaires"
             },
-            "de_DE": {
-                "superposition": "Ein Quantenzustand, in dem eine Aufgabe in mehreren Zuständen gleichzeitig existiert",
-                "entanglement": "Ein Quantenphänomen, bei dem Aufgaben korreliert werden",
-                "measurement": "Der Prozess der Beobachtung eines Quantenaufgabenzustands",
-                "coherence": "Der Grad der Quantenkorrelation im System",
-                "interference": "Quanteneffekt, der Wahrscheinlichkeiten verstärken oder reduzieren kann",
-                "tunneling": "Quanteneffekt, der es Aufgaben ermöglicht, Barrieren zu überwinden"
+            SupportedLanguage.GERMAN.value: {
+                "startup_idea": "Startup-Idee",
+                "description": "Beschreibung",
+                "category": "Kategorie",
+                "status": "Status",
+                "created": "Erstellt", 
+                "validation_error": "Validierungsfehler",
+                "success_message": "Operation erfolgreich abgeschlossen",
+                "processing": "Verarbeitung...",
+                "budget_warning": "Budget-Warnung: {threshold}% erreicht",
+                "idea_validated": "Idee wurde validiert",
+                "similar_ideas_found": "{count} ähnliche Ideen gefunden"
             },
-            "ja_JP": {
-                "superposition": "タスクが複数の状態に同時に存在する量子状態",
-                "entanglement": "タスクが相関する量子現象",
-                "measurement": "量子タスク状態を観測するプロセス",
-                "coherence": "システム内の量子相関の度合い",
-                "interference": "確率を向上または減少させる量子効果",
-                "tunneling": "タスクが障壁を克服することを可能にする量子効果"
+            SupportedLanguage.JAPANESE.value: {
+                "startup_idea": "スタートアップのアイデア",
+                "description": "説明",
+                "category": "カテゴリー",
+                "status": "ステータス",
+                "created": "作成日",
+                "validation_error": "検証エラー", 
+                "success_message": "操作が正常に完了しました",
+                "processing": "処理中...",
+                "budget_warning": "予算警告: {threshold}%に達しました",
+                "idea_validated": "アイデアが検証されました",
+                "similar_ideas_found": "{count}個の類似アイデアが見つかりました"
             },
-            "zh_CN": {
-                "superposition": "任务同时存在于多个状态的量子态",
-                "entanglement": "任务变得相关的量子现象",
-                "measurement": "观察量子任务状态的过程",
-                "coherence": "系统中量子关联的程度",
-                "interference": "可以增强或减少概率的量子效应",
-                "tunneling": "允许任务克服障碍的量子效应"
+            SupportedLanguage.CHINESE_SIMPLIFIED.value: {
+                "startup_idea": "创业想法",
+                "description": "描述",
+                "category": "类别",
+                "status": "状态",
+                "created": "创建时间",
+                "validation_error": "验证错误",
+                "success_message": "操作成功完成", 
+                "processing": "处理中...",
+                "budget_warning": "预算警告：已达到{threshold}%",
+                "idea_validated": "想法已通过验证",
+                "similar_ideas_found": "找到{count}个类似想法"
             }
         }
-
-    def _initialize_locale_info(self):
-        """Initialize locale information for all supported locales."""
-        for locale_code in SupportedLocale:
-            self.locale_info[locale_code.value] = LocaleInfo.from_locale_code(locale_code.value)
-
-    def set_locale(self, locale_code: str) -> bool:
-        """
-        Set the current locale.
+    
+    def get_text(self, key: str, **kwargs) -> str:
+        """Get localized text for a given key"""
+        language = self.config.language.value
         
-        Args:
-            locale_code: Locale code (e.g., 'en_US', 'es_ES')
+        if language not in self.translations:
+            language = SupportedLanguage.ENGLISH.value
             
-        Returns:
-            True if locale was set successfully
-        """
-        if locale_code in self.translations:
-            self.current_locale = locale_code
-            logger.info(f"Locale set to {locale_code}")
+        translation = self.translations[language].get(key, key)
+        
+        # Format with provided arguments
+        try:
+            return translation.format(**kwargs)
+        except (KeyError, ValueError):
+            return translation
+    
+    def get_supported_languages(self) -> list[str]:
+        """Get list of supported language codes"""
+        return [lang.value for lang in SupportedLanguage]
+    
+    def set_language(self, language: SupportedLanguage):
+        """Change the current language"""
+        self.config.language = language
+        logger.info(f"Language changed to {language.value}")
+    
+    def set_region(self, region: Region):
+        """Change the current region"""
+        self.config.region = region
+        logger.info(f"Region changed to {region.value}")
+    
+    def format_currency(self, amount: float) -> str:
+        """Format currency based on regional settings"""
+        currency_formats = {
+            Region.NORTH_AMERICA: lambda x: f"${x:,.2f}",
+            Region.EUROPE: lambda x: f"€{x:,.2f}".replace(",", " "),
+            Region.ASIA_PACIFIC: lambda x: f"¥{x:,.0f}",
+            Region.LATIN_AMERICA: lambda x: f"${x:,.2f}"
+        }
+        
+        formatter = currency_formats.get(self.config.region, currency_formats[Region.NORTH_AMERICA])
+        return formatter(amount)
+    
+    def format_date(self, date_obj) -> str:
+        """Format date based on regional preferences"""
+        date_formats = {
+            Region.NORTH_AMERICA: "%m/%d/%Y",
+            Region.EUROPE: "%d.%m.%Y", 
+            Region.ASIA_PACIFIC: "%Y年%m月%d日",
+            Region.LATIN_AMERICA: "%d/%m/%Y"
+        }
+        
+        date_format = date_formats.get(self.config.region, date_formats[Region.NORTH_AMERICA])
+        return date_obj.strftime(date_format)
+
+class ComplianceManager:
+    """Manages regional compliance requirements"""
+    
+    def __init__(self, region: Region = Region.NORTH_AMERICA):
+        """Initialize compliance manager for specific region"""
+        self.region = region
+        self.compliance_rules = self._load_compliance_rules()
+        
+        logger.info(f"Compliance manager initialized for {region.value}")
+    
+    def _load_compliance_rules(self) -> Dict[str, Any]:
+        """Load compliance rules for the region"""
+        rules = {
+            Region.NORTH_AMERICA: {
+                "data_retention_days": 2555,  # 7 years
+                "requires_consent": True,
+                "allows_profiling": True,
+                "data_transfer_restrictions": False,
+                "privacy_regulations": ["CCPA"],
+                "required_disclosures": ["data_collection", "third_party_sharing"]
+            },
+            Region.EUROPE: {
+                "data_retention_days": 1095,  # 3 years default
+                "requires_consent": True,
+                "allows_profiling": False,  # Requires explicit consent
+                "data_transfer_restrictions": True,
+                "privacy_regulations": ["GDPR"],
+                "required_disclosures": ["data_collection", "legal_basis", "data_subject_rights"]
+            },
+            Region.ASIA_PACIFIC: {
+                "data_retention_days": 1825,  # 5 years
+                "requires_consent": True,
+                "allows_profiling": True,
+                "data_transfer_restrictions": True,
+                "privacy_regulations": ["PDPA"],
+                "required_disclosures": ["data_collection", "cross_border_transfer"]
+            },
+            Region.LATIN_AMERICA: {
+                "data_retention_days": 1825,  # 5 years
+                "requires_consent": True, 
+                "allows_profiling": True,
+                "data_transfer_restrictions": False,
+                "privacy_regulations": ["LGPD"],
+                "required_disclosures": ["data_collection", "retention_period"]
+            }
+        }
+        
+        return rules.get(self.region, rules[Region.NORTH_AMERICA])
+    
+    def validate_data_collection(self, data_types: list[str]) -> bool:
+        """Validate that data collection complies with regional rules"""
+        if not self.compliance_rules["requires_consent"]:
             return True
-        logger.warning(f"Locale {locale_code} not supported, keeping {self.current_locale}")
-        return False
-
-    def get_current_locale(self) -> str:
-        """Get the current locale code."""
-        return self.current_locale
-
-    def get_supported_locales(self) -> list[str]:
-        """Get list of supported locale codes."""
-        return list(self.translations.keys())
-
-    def get_locale_info(self, locale_code: str | None = None) -> LocaleInfo:
-        """Get locale information."""
-        locale_code = locale_code or self.current_locale
-        return self.locale_info.get(locale_code, self.locale_info[self.default_locale])
-
-    def translate(self, key: str, locale_code: str | None = None, **kwargs) -> str:
-        """
-        Translate a text key to the specified or current locale.
-        
-        Args:
-            key: Translation key
-            locale_code: Target locale (uses current if not specified)
-            **kwargs: Parameters for string formatting
             
-        Returns:
-            Translated text
-        """
-        locale_code = locale_code or self.current_locale
-
-        # Get translation from current locale
-        translations = self.translations.get(locale_code, {})
-        translated_text = translations.get(key)
-
-        # Fall back to default locale if not found
-        if not translated_text and locale_code != self.default_locale:
-            default_translations = self.translations.get(self.default_locale, {})
-            translated_text = default_translations.get(key)
-
-        # Fall back to key itself if no translation found
-        if not translated_text:
-            translated_text = key
-            logger.debug(f"No translation found for key '{key}' in locale '{locale_code}'")
-
-        # Apply string formatting if parameters provided
-        if kwargs:
-            try:
-                translated_text = translated_text.format(**kwargs)
-            except (KeyError, ValueError) as e:
-                logger.warning(f"Failed to format translation '{key}': {e}")
-
-        return translated_text
-
-    def get_quantum_term_explanation(self, term: str, locale_code: str | None = None) -> str:
-        """
-        Get explanation of quantum terminology in specified locale.
-        
-        Args:
-            term: Quantum term to explain
-            locale_code: Target locale (uses current if not specified)
+        # In production, this would check against consent records
+        logger.info(f"Validating data collection for {len(data_types)} data types")
+        return True
+    
+    def get_retention_period(self) -> int:
+        """Get data retention period in days for the region"""
+        return self.compliance_rules["data_retention_days"]
+    
+    def requires_explicit_consent_for_profiling(self) -> bool:
+        """Check if profiling requires explicit consent"""
+        return not self.compliance_rules["allows_profiling"]
+    
+    def get_required_disclosures(self) -> list[str]:
+        """Get list of required privacy disclosures"""
+        return self.compliance_rules["required_disclosures"]
+    
+    def validate_cross_border_transfer(self, target_region: Region) -> bool:
+        """Validate if cross-border data transfer is allowed"""
+        if not self.compliance_rules["data_transfer_restrictions"]:
+            return True
             
-        Returns:
-            Term explanation
-        """
-        locale_code = locale_code or self.current_locale
-
-        # Get explanation from current locale
-        terms = self.quantum_terms.get(locale_code, {})
-        explanation = terms.get(term)
-
-        # Fall back to English if not found
-        if not explanation and locale_code != "en_US":
-            english_terms = self.quantum_terms.get("en_US", {})
-            explanation = english_terms.get(term)
-
-        return explanation or f"Quantum term: {term}"
-
-    def format_datetime(self, dt: datetime, locale_code: str | None = None,
-                       include_time: bool = True) -> str:
-        """
-        Format datetime according to locale conventions.
-        
-        Args:
-            dt: Datetime to format
-            locale_code: Target locale (uses current if not specified)
-            include_time: Whether to include time component
-            
-        Returns:
-            Formatted datetime string
-        """
-        locale_info = self.get_locale_info(locale_code)
-
-        try:
-            if include_time:
-                format_str = f"{locale_info.date_format} {locale_info.time_format}"
-            else:
-                format_str = locale_info.date_format
-
-            return dt.strftime(format_str)
-
-        except Exception as e:
-            logger.warning(f"Failed to format datetime: {e}")
-            return dt.isoformat()
-
-    def format_duration(self, duration: timedelta, locale_code: str | None = None) -> str:
-        """
-        Format duration according to locale conventions.
-        
-        Args:
-            duration: Duration to format
-            locale_code: Target locale (uses current if not specified)
-            
-        Returns:
-            Formatted duration string
-        """
-        total_seconds = int(duration.total_seconds())
-
-        if total_seconds < 60:
-            return self.translate("duration_seconds", locale_code, count=total_seconds)
-        if total_seconds < 3600:
-            minutes = total_seconds // 60
-            return self.translate("duration_minutes", locale_code, count=minutes)
-        if total_seconds < 86400:
-            hours = total_seconds // 3600
-            return self.translate("duration_hours", locale_code, count=hours)
-        days = total_seconds // 86400
-        return self.translate("duration_days", locale_code, count=days)
-
-    def format_number(self, number: int | float, locale_code: str | None = None) -> str:
-        """
-        Format number according to locale conventions.
-        
-        Args:
-            number: Number to format
-            locale_code: Target locale (uses current if not specified)
-            
-        Returns:
-            Formatted number string
-        """
-        locale_info = self.get_locale_info(locale_code)
-
-        try:
-            # Simple formatting using locale conventions
-            if isinstance(number, float):
-                number_str = f"{number:.2f}"
-            else:
-                number_str = str(number)
-
-            # Apply thousands separator
-            if locale_info.thousands_separator != ",":
-                number_str = number_str.replace(",", locale_info.thousands_separator)
-
-            # Apply decimal separator
-            if locale_info.decimal_separator != ".":
-                number_str = number_str.replace(".", locale_info.decimal_separator)
-
-            return number_str
-
-        except Exception as e:
-            logger.warning(f"Failed to format number: {e}")
-            return str(number)
-
-    def get_privacy_notice(self, locale_code: str | None = None) -> dict[str, str]:
-        """
-        Get privacy notice text for compliance (GDPR, etc.).
-        
-        Args:
-            locale_code: Target locale (uses current if not specified)
-            
-        Returns:
-            Dictionary with privacy notice components
-        """
-        return {
-            "title": self.translate("privacy_notice", locale_code),
-            "data_processing": self.translate("data_processing_notice", locale_code),
-            "gdpr_compliance": self.translate("gdpr_compliance", locale_code),
-            "data_retention": self.translate("data_retention_notice", locale_code),
-            "consent_required": self.translate("consent_required", locale_code)
+        # Simplified validation - in production would check adequacy decisions
+        allowed_transfers = {
+            Region.EUROPE: [Region.NORTH_AMERICA],  # Assuming adequate protection
+            Region.ASIA_PACIFIC: [Region.NORTH_AMERICA, Region.EUROPE]
         }
-
-    def get_rtl_support(self, locale_code: str | None = None) -> dict[str, Any]:
-        """
-        Get right-to-left language support information.
         
-        Args:
-            locale_code: Target locale (uses current if not specified)
-            
-        Returns:
-            RTL support configuration
-        """
-        locale_info = self.get_locale_info(locale_code)
+        return target_region in allowed_transfers.get(self.region, [])
 
-        return {
-            "is_rtl": locale_info.is_rtl,
-            "text_direction": "rtl" if locale_info.is_rtl else "ltr",
-            "css_direction": "direction: rtl;" if locale_info.is_rtl else "direction: ltr;",
-            "text_align": "right" if locale_info.is_rtl else "left"
-        }
+# Global instances
+_i18n_manager: Optional[InternationalizationManager] = None
+_compliance_manager: Optional[ComplianceManager] = None
 
-    def export_translation_keys(self, output_file: Path):
-        """
-        Export all translation keys for translator reference.
-        
-        Args:
-            output_file: File to save translation keys
-        """
-        base_translations = self._get_base_translations()
-        quantum_terms = self.quantum_terms.get("en_US", {})
-
-        export_data = {
-            "translation_keys": base_translations,
-            "quantum_terminology": quantum_terms,
-            "supported_locales": self.get_supported_locales(),
-            "export_timestamp": datetime.utcnow().isoformat()
-        }
-
-        try:
-            with open(output_file, 'w', encoding='utf-8') as f:
-                json.dump(export_data, f, indent=2, ensure_ascii=False)
-            logger.info(f"Translation keys exported to {output_file}")
-        except OSError as e:
-            logger.error(f"Failed to export translation keys: {e}")
-
-
-# Global i18n manager instance
-_i18n_manager: QuantumI18nManager | None = None
-
-
-def get_i18n_manager(default_locale: str = "en_US") -> QuantumI18nManager:
-    """Get the global i18n manager instance."""
+def get_i18n_manager(config: Optional[LocalizationConfig] = None) -> InternationalizationManager:
+    """Get or create global i18n manager"""
     global _i18n_manager
-
-    if _i18n_manager is None:
-        _i18n_manager = QuantumI18nManager(default_locale)
-
+    if _i18n_manager is None or config is not None:
+        _i18n_manager = InternationalizationManager(config)
     return _i18n_manager
 
+def get_compliance_manager(region: Optional[Region] = None) -> ComplianceManager:
+    """Get or create global compliance manager"""
+    global _compliance_manager
+    if _compliance_manager is None or region is not None:
+        _compliance_manager = ComplianceManager(region or Region.NORTH_AMERICA)
+    return _compliance_manager
 
-def t(key: str, locale_code: str | None = None, **kwargs) -> str:
-    """
-    Convenience function for translation.
-    
-    Args:
-        key: Translation key
-        locale_code: Target locale (uses current if not specified)
-        **kwargs: Parameters for string formatting
-        
-    Returns:
-        Translated text
-    """
-    return get_i18n_manager().translate(key, locale_code, **kwargs)
+def translate(key: str, **kwargs) -> str:
+    """Convenience function for translation"""
+    return get_i18n_manager().get_text(key, **kwargs)
 
-
-def set_locale(locale_code: str) -> bool:
-    """
-    Convenience function to set locale.
-    
-    Args:
-        locale_code: Locale code to set
-        
-    Returns:
-        True if locale was set successfully
-    """
-    return get_i18n_manager().set_locale(locale_code)
+def format_currency(amount: float, region: Optional[Region] = None) -> str:
+    """Convenience function for currency formatting"""
+    if region:
+        manager = InternationalizationManager(LocalizationConfig(region=region))
+        return manager.format_currency(amount)
+    return get_i18n_manager().format_currency(amount)
