@@ -14,6 +14,13 @@ x-common-variables: &common-variables
   # AI/ML optimization
   OMP_NUM_THREADS: "1"
   OPENBLAS_NUM_THREADS: "1"
+  # Autonomous SDLC Generation 3.0 optimizations
+  NEURAL_EVOLUTION_ENABLED: "true"
+  QUANTUM_OPTIMIZATION_ENABLED: "true"
+  MULTIMODAL_AI_ENABLED: "true"
+  REALTIME_INTELLIGENCE_ENABLED: "true"
+  PREDICTIVE_ANALYTICS_ENABLED: "true"
+  AUTONOMOUS_CODE_GEN_ENABLED: "true"
 
 x-common-logging: &common-logging
   driver: "json-file"
@@ -33,11 +40,19 @@ x-common-healthcheck: &common-healthcheck
 
 x-common-resources: &common-resources
   limits:
+    memory: 4G
+    cpus: '2.0'
+  reservations:
+    memory: 1G
+    cpus: '0.5'
+
+x-ai-enhanced-resources: &ai-enhanced-resources
+  limits:
+    memory: 8G
+    cpus: '4.0'
+  reservations:
     memory: 2G
     cpus: '1.0'
-  reservations:
-    memory: 512M
-    cpus: '0.25'
 
 networks:
   app-network:
@@ -105,7 +120,7 @@ services:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
       <<: *common-healthcheck
     deploy:
-      resources: *common-resources
+      resources: *ai-enhanced-resources
 
   # AI Agent Workers (scaled horizontally)
   ai-worker-1:
@@ -173,6 +188,162 @@ services:
         reservations:
           memory: 1G
           cpus: '0.5'
+
+  # Neural Evolution Engine Service
+  neural-evolution:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: neural-evolution
+    image: terragon/agentic-startup-studio:${VERSION:-latest}
+    container_name: agentic-neural-evolution
+    hostname: neural-evolution
+    <<: *common-restart
+    environment:
+      <<: *common-variables
+      INSTANCE_ID: neural-evolution
+      SERVICE_TYPE: neural-evolution
+      EVOLUTION_POPULATION_SIZE: 50
+      QUANTUM_NEURONS_ENABLED: "true"
+    ports:
+      - "8082:8000"
+    volumes:
+      - model-cache:/app/models
+      - app-logs:/app/logs
+    networks:
+      - app-network
+      - monitoring-network
+    logging: *common-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      <<: *common-healthcheck
+    deploy:
+      resources: *ai-enhanced-resources
+
+  # Quantum Performance Optimizer Service
+  quantum-optimizer:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: quantum-optimizer
+    image: terragon/agentic-startup-studio:${VERSION:-latest}
+    container_name: agentic-quantum-optimizer
+    hostname: quantum-optimizer
+    <<: *common-restart
+    environment:
+      <<: *common-variables
+      INSTANCE_ID: quantum-optimizer
+      SERVICE_TYPE: quantum-optimizer
+      QUANTUM_ANNEALING_ENABLED: "true"
+      OPTIMIZATION_CYCLES: 1000
+    ports:
+      - "8083:8000"
+    volumes:
+      - app-cache:/app/cache
+      - app-logs:/app/logs
+    networks:
+      - app-network
+      - monitoring-network
+    logging: *common-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      <<: *common-healthcheck
+    deploy:
+      resources: *ai-enhanced-resources
+
+  # Real-time Intelligence Service
+  realtime-intelligence:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: realtime-intelligence
+    image: terragon/agentic-startup-studio:${VERSION:-latest}
+    container_name: agentic-realtime-intelligence
+    hostname: realtime-intelligence
+    <<: *common-restart
+    environment:
+      <<: *common-variables
+      INSTANCE_ID: realtime-intelligence
+      SERVICE_TYPE: realtime-intelligence
+      MAX_WORKERS: 16
+      EVENT_STREAM_SIZE: 10000
+    ports:
+      - "8084:8000"
+    volumes:
+      - app-cache:/app/cache
+      - app-logs:/app/logs
+    networks:
+      - app-network
+      - monitoring-network
+    logging: *common-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      <<: *common-healthcheck
+    deploy:
+      resources: *ai-enhanced-resources
+
+  # Multimodal AI Engine Service
+  multimodal-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: multimodal-ai
+    image: terragon/agentic-startup-studio:${VERSION:-latest}
+    container_name: agentic-multimodal-ai
+    hostname: multimodal-ai
+    <<: *common-restart
+    environment:
+      <<: *common-variables
+      INSTANCE_ID: multimodal-ai
+      SERVICE_TYPE: multimodal-ai
+      MODALITIES_ENABLED: "text,image,audio,video,numeric,temporal,graph,geospatial"
+      FUSION_STRATEGY: "attention"
+    ports:
+      - "8085:8000"
+    volumes:
+      - model-cache:/app/models
+      - app-cache:/app/cache
+      - app-logs:/app/logs
+    networks:
+      - app-network
+      - monitoring-network
+    logging: *common-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      <<: *common-healthcheck
+    deploy:
+      resources: *ai-enhanced-resources
+
+  # Autonomous Code Generator Service
+  code-generator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: code-generator
+    image: terragon/agentic-startup-studio:${VERSION:-latest}
+    container_name: agentic-code-generator
+    hostname: code-generator
+    <<: *common-restart
+    environment:
+      <<: *common-variables
+      INSTANCE_ID: code-generator
+      SERVICE_TYPE: code-generator
+      SUPPORTED_LANGUAGES: "python,javascript,typescript,java,go,rust,sql,yaml,json"
+      QUALITY_THRESHOLD: 0.8
+    ports:
+      - "8086:8000"
+    volumes:
+      - app-cache:/app/cache
+      - app-logs:/app/logs
+    networks:
+      - app-network
+      - monitoring-network
+    logging: *common-logging
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      <<: *common-healthcheck
+    deploy:
+      resources: *ai-enhanced-resources
 
   # Model serving service (for AI model inference)
   model-server:
