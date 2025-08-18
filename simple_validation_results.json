@@ -1,0 +1,84 @@
+{
+  "summary": {
+    "total_tests": 7,
+    "passed": 4,
+    "failed": 3,
+    "success_rate": 0.5714285714285714,
+    "total_time": 1.0254638195037842
+  },
+  "results": [
+    {
+      "test_name": "Enhanced Autonomous Engine",
+      "passed": true,
+      "message": "Engine created and executed successfully",
+      "execution_time": 0.11673665046691895,
+      "metadata": {
+        "total_tasks": 1,
+        "success_rate": 1.0
+      },
+      "timestamp": "2025-08-17T23:18:53.451299"
+    },
+    {
+      "test_name": "Quantum Intelligence Orchestrator",
+      "passed": true,
+      "message": "Orchestrator created and executed successfully",
+      "execution_time": 0.012066125869750977,
+      "metadata": {
+        "total_tasks": 1,
+        "quantum_efficiency": 0.0
+      },
+      "timestamp": "2025-08-17T23:18:53.563820"
+    },
+    {
+      "test_name": "Adaptive Neural Evolution",
+      "passed": false,
+      "message": "No module named 'numpy'",
+      "execution_time": 0.015366315841674805,
+      "metadata": {},
+      "timestamp": "2025-08-17T23:18:53.679872"
+    },
+    {
+      "test_name": "Resilience Framework",
+      "passed": false,
+      "message": "No module named 'pydantic'",
+      "execution_time": 0.03919363021850586,
+      "metadata": {},
+      "timestamp": "2025-08-17T23:18:53.819665"
+    },
+    {
+      "test_name": "Security Framework",
+      "passed": true,
+      "message": "Security framework initialized successfully",
+      "execution_time": 0.11976861953735352,
+      "metadata": {
+        "policy_name": "test_policy",
+        "incidents_detected": 0
+      },
+      "timestamp": "2025-08-17T23:18:54.040134"
+    },
+    {
+      "test_name": "Quantum Scale Optimizer",
+      "passed": true,
+      "message": "Scale optimizer working correctly",
+      "execution_time": 0.01564168930053711,
+      "metadata": {
+        "scaling_targets": 1,
+        "actions_generated": 0
+      },
+      "timestamp": "2025-08-17T23:18:54.156249"
+    },
+    {
+      "test_name": "Component Integration",
+      "passed": false,
+      "message": "No module named 'pydantic'",
+      "execution_time": 0.0025110244750976562,
+      "metadata": {},
+      "timestamp": "2025-08-17T23:18:54.259278"
+    }
+  ],
+  "failed_tests": [
+    "Adaptive Neural Evolution",
+    "Resilience Framework",
+    "Component Integration"
+  ]
+}
