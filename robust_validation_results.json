@@ -1,0 +1,108 @@
+{
+  "test_suite": "Generation 2: MAKE IT ROBUST (Reliable)",
+  "timestamp": "2025-08-19T12:20:16.269419",
+  "overall_status": "passed",
+  "total_tests": 5,
+  "passed_tests": 5,
+  "failed_tests": 0,
+  "error_tests": 0,
+  "total_duration": 0.0026123523712158203,
+  "test_results": [
+    {
+      "test_name": "error_handling_infrastructure",
+      "timestamp": "2025-08-19T12:20:16.269459",
+      "status": "passed",
+      "duration_seconds": 0.0012705326080322266,
+      "checks": [
+        "\u2705 Circuit breaker infrastructure found: pipeline/infrastructure/circuit_breaker.py",
+        "\u2705 Circuit breaker infrastructure found: pipeline/infrastructure/resilience_framework.py",
+        "\u2705 pipeline/main_pipeline.py has comprehensive error handling",
+        "\u2705 pipeline/services/budget_sentinel.py has comprehensive error handling",
+        "\u2705 pipeline/ingestion/idea_manager.py has comprehensive error handling",
+        "\u2705 Custom exception handling works",
+        "\u2705 Logging infrastructure found: pipeline/infrastructure/enhanced_logging.py",
+        "\u2705 Logging infrastructure found: pipeline/config/settings.py"
+      ],
+      "errors": [],
+      "warnings": [],
+      "metadata": {}
+    },
+    {
+      "test_name": "security_measures",
+      "timestamp": "2025-08-19T12:20:16.270776",
+      "status": "passed",
+      "duration_seconds": 0.00041866302490234375,
+      "checks": [
+        "\u2705 Security file found: SECURITY.md",
+        "\u2705 Security file found: pipeline/security/enhanced_security.py",
+        "\u2705 Security file found: bandit_results.json",
+        "\u2705 Security file found: security_audit_results.json",
+        "\u2705 Input sanitization works correctly",
+        "\u2705 Authentication infrastructure found: pipeline/api/gateway.py",
+        "\u2705 Authentication infrastructure found: pipeline/integrations/auth_provider.py",
+        "\u2705 Password hashing works consistently"
+      ],
+      "errors": [],
+      "warnings": [],
+      "metadata": {}
+    },
+    {
+      "test_name": "monitoring_observability",
+      "timestamp": "2025-08-19T12:20:16.271235",
+      "status": "passed",
+      "duration_seconds": 0.0004010200500488281,
+      "checks": [
+        "\u2705 Monitoring infrastructure found: monitoring/prometheus.yml",
+        "\u2705 Monitoring infrastructure found: monitoring/alerts.yml",
+        "\u2705 Monitoring infrastructure found: grafana/",
+        "\u2705 Monitoring infrastructure found: pipeline/infrastructure/observability.py",
+        "\u2705 Monitoring infrastructure found: monitoring/tracing_instrumentation.py",
+        "\u2705 Metrics collection works",
+        "\u2705 Health check infrastructure found: pipeline/api/health_server.py",
+        "\u2705 Health check infrastructure found: pipeline/infrastructure/simple_health.py",
+        "\u2705 Health check infrastructure found: scripts/run_health_checks.py",
+        "\u2705 Health check logic works"
+      ],
+      "errors": [],
+      "warnings": [],
+      "metadata": {}
+    },
+    {
+      "test_name": "comprehensive_data_validation",
+      "timestamp": "2025-08-19T12:20:16.271687",
+      "status": "passed",
+      "duration_seconds": 0.00025582313537597656,
+      "checks": [
+        "\u2705 Validation infrastructure found: pipeline/ingestion/validators.py",
+        "\u2705 Validation infrastructure found: pipeline/quantum/validators.py",
+        "\u2705 Validation infrastructure found: tests/framework/validation_engine.py",
+        "\u2705 Validation test 'valid_idea' passed",
+        "\u2705 Validation test 'missing_required' passed",
+        "\u2705 Validation test 'invalid_score' passed",
+        "\u2705 Validation test 'too_short' passed",
+        "\u2705 All comprehensive validation tests passed"
+      ],
+      "errors": [],
+      "warnings": [],
+      "metadata": {}
+    },
+    {
+      "test_name": "budget_cost_controls",
+      "timestamp": "2025-08-19T12:20:16.271975",
+      "status": "passed",
+      "duration_seconds": 0.0002663135528564453,
+      "checks": [
+        "\u2705 Budget control infrastructure found: pipeline/services/budget_sentinel.py",
+        "\u2705 Budget control infrastructure found: core/budget_sentinel_base.py",
+        "\u2705 Budget control infrastructure found: core/token_budget_sentinel.py",
+        "\u2705 Budget control infrastructure found: core/ad_budget_sentinel.py",
+        "\u2705 Budget tracker correctly rejects over-budget operations",
+        "\u2705 Budget utilization tracking works: 75.00%",
+        "\u2705 Cost prediction logic works"
+      ],
+      "errors": [],
+      "warnings": [],
+      "metadata": {}
+    }
+  ]
+}
