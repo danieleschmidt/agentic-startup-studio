@@ -38,6 +38,22 @@ from pipeline.services.pitch_deck_generator import (
 from pipeline.services.workflow_orchestrator import (
     get_workflow_orchestrator,
 )
+from pipeline.core.research_neural_integration import (
+    get_research_neural_integration,
+)
+from pipeline.core.quantum_realtime_orchestrator import (
+    get_quantum_realtime_orchestrator,
+    OrchestratorMode,
+)
+from pipeline.core.scalable_evolution_engine import (
+    get_scalable_evolution_engine,
+    ScalabilityProfile,
+)
+from pipeline.core.global_compliance_engine import (
+    get_global_compliance_engine,
+    ComplianceRegion,
+    DataClassification,
+)
 
 
 @dataclass
@@ -48,6 +64,12 @@ class PipelineResult:
     # Phase results
     validation_result: dict[str, Any] = field(default_factory=dict)
     evidence_collection_result: dict[str, list] = field(default_factory=dict)
+    research_result: dict[str, Any] = field(default_factory=dict)  # Research-Neural Integration result
+    quantum_orchestrator_metrics: dict[str, Any] = field(default_factory=dict)  # Quantum Real-time Orchestrator metrics
+    scalable_evolution_metrics: dict[str, Any] = field(default_factory=dict)  # Scalable Evolution Engine metrics
+    global_compliance_metrics: dict[str, Any] = field(default_factory=dict)  # Global Compliance Engine metrics
+    global_compliance_assessment: dict[str, Any] = field(default_factory=dict)  # Global compliance assessment results
+    data_residency_validations: dict[str, Any] = field(default_factory=dict)  # Data residency validation results
     pitch_deck_result: Any = None  # PitchDeck object
     campaign_result: Any = None    # Campaign object
     mvp_result: Any = None         # MVPResult object
@@ -81,6 +103,23 @@ class MainPipeline:
         self.evidence_collector = get_evidence_collector()
         self.pitch_deck_generator = get_pitch_deck_generator()
         self.campaign_generator = get_campaign_generator()
+        self.research_neural_integration = get_research_neural_integration()
+        self.quantum_orchestrator = get_quantum_realtime_orchestrator(OrchestratorMode.ADAPTIVE)
+        
+        # Initialize scalability profile for maximum performance
+        scalability_profile = ScalabilityProfile(
+            max_concurrent_users=10000,
+            max_requests_per_second=5000.0,
+            memory_scaling_factor=2.0,
+            cpu_scaling_factor=3.0,
+            storage_scaling_factor=5.0,
+            network_bandwidth_limit=20.0,  # 20 Gbps
+            cache_hit_ratio_target=0.98,
+            response_time_sla_ms=100.0,
+            availability_target=0.9999  # 99.99% uptime
+        )
+        self.scalable_evolution_engine = get_scalable_evolution_engine(scalability_profile)
+        self.global_compliance_engine = get_global_compliance_engine()
 
         # These will be initialized async in execute_full_pipeline
         self.idea_manager = None
@@ -160,11 +199,21 @@ class MainPipeline:
                 BudgetCategory.INFRASTRUCTURE,
                 max_total_budget
             ):
+                # Initialize and start advanced orchestration engines
+                await self.quantum_orchestrator.start()
+                await self.scalable_evolution_engine.start()
+                
+                # Execute global compliance assessment
+                await self._execute_global_compliance_assessment(startup_idea, result)
+                
                 # Phase 1: Data Ingestion and Validation
                 await self._execute_phase_1(startup_idea, result)
 
                 # Phase 2: Data Processing (Evidence Collection)
                 await self._execute_phase_2(startup_idea, result)
+
+                # Phase 2.5: Research-Neural Integration (Enhanced Analysis)
+                await self._execute_phase_2_5_research(startup_idea, result)
 
                 # Phase 3: Data Transformation (Pitch Deck Generation)
                 await self._execute_phase_3(startup_idea, target_investor, result)
@@ -178,6 +227,20 @@ class MainPipeline:
 
                 # Calculate final metrics
                 await self._calculate_final_metrics(result)
+                
+                # Collect metrics from all advanced engines
+                orchestrator_status = self.quantum_orchestrator.get_orchestrator_status()
+                result.quantum_orchestrator_metrics = orchestrator_status
+                
+                evolution_status = self.scalable_evolution_engine.get_scalability_status()
+                result.scalable_evolution_metrics = evolution_status
+                
+                compliance_status = self.global_compliance_engine.get_compliance_summary()
+                result.global_compliance_metrics = compliance_status
+                
+                # Stop advanced engines
+                await self.quantum_orchestrator.stop()
+                await self.scalable_evolution_engine.stop()
 
                 result.completed_at = datetime.utcnow()
                 result.execution_time_seconds = (
@@ -305,6 +368,174 @@ class MainPipeline:
             result.phases_failed.append("phase_2_processing")
             result.errors.append(f"Phase 2 failed: {str(e)}")
             self.logger.error(f"Phase 2 execution failed: {e}")
+
+    async def _execute_phase_2_5_research(self, startup_idea: str, result: PipelineResult) -> None:
+        """Execute Phase 2.5: Research-Neural Integration (Enhanced Analysis)."""
+        self.logger.info("Executing Phase 2.5: Research-Neural Integration (Enhanced Analysis)")
+
+        try:
+            # Define research question based on startup idea
+            research_question = f"Can neural evolution optimization improve the validation accuracy and market potential assessment for the startup idea: {startup_idea}?"
+            
+            # Define data sources from previous evidence collection
+            data_sources = [
+                "evidence_collection_results.json",
+                "market_validation_data.json", 
+                "competitive_analysis.json"
+            ]
+            
+            # Define success metrics for research validation
+            success_metrics = {
+                "validation_accuracy_improvement": 0.15,  # 15% improvement target
+                "statistical_significance": 0.05,        # p < 0.05
+                "effect_size_minimum": 0.3,              # Cohen's d > 0.3
+                "reproducibility_threshold": 0.8         # 80% reproducibility
+            }
+            
+            # Execute autonomous research with neural enhancement
+            research_result = await self.research_neural_integration.execute_autonomous_research(
+                research_question=research_question,
+                data_sources=data_sources,
+                success_metrics=success_metrics,
+                max_iterations=5
+            )
+            
+            # Integrate research findings into pipeline result
+            result.research_result = {
+                'experiment_id': research_result.experiment_id,
+                'hypothesis': research_result.hypothesis,
+                'statistical_significance': research_result.statistical_significance,
+                'p_value': research_result.p_value,
+                'effect_size': research_result.effect_size,
+                'confidence_interval': research_result.confidence_interval,
+                'data_points': research_result.data_points,
+                'reproducibility_score': research_result.reproducibility_score,
+                'publication_readiness': research_result.publication_readiness,
+                'methodology': research_result.methodology,
+                'execution_time': research_result.execution_time,
+                'recommendations': research_result.recommendations,
+                'neural_enhanced': True
+            }
+            
+            # Update validation scores based on research findings if significant
+            if research_result.statistical_significance > 0 and research_result.effect_size > 0.3:
+                enhancement_factor = min(1.5, 1.0 + (research_result.effect_size * 0.3))
+                
+                # Enhance existing validation scores
+                if 'validation_result' in result.__dict__ and result.validation_result:
+                    original_score = result.validation_result.get('overall_score', 0.0)
+                    enhanced_score = min(1.0, original_score * enhancement_factor)
+                    result.validation_result['neural_enhanced_score'] = enhanced_score
+                    result.validation_result['enhancement_factor'] = enhancement_factor
+                    result.validation_result['research_validated'] = True
+                    
+                    self.logger.info(f"Neural research enhanced validation score: "
+                                   f"{original_score:.3f} → {enhanced_score:.3f} "
+                                   f"(factor: {enhancement_factor:.2f})")
+
+            result.phases_completed.append("phase_2_5_research")
+            
+            self.logger.info(f"Phase 2.5 completed: research p-value={research_result.p_value:.4f}, "
+                           f"effect_size={research_result.effect_size:.3f}, "
+                           f"publication_ready={research_result.publication_readiness > 0.7}")
+
+        except Exception as e:
+            result.phases_failed.append("phase_2_5_research")
+            result.errors.append(f"Phase 2.5 failed: {str(e)}")
+            self.logger.error(f"Phase 2.5 execution failed: {e}")
+            
+            # Add placeholder research result for downstream phases
+            result.research_result = {
+                'experiment_id': 'failed',
+                'statistical_significance': 0.0,
+                'neural_enhanced': False,
+                'error': str(e)
+            }
+
+    async def _execute_global_compliance_assessment(self, startup_idea: str, result: PipelineResult) -> None:
+        """Execute global compliance assessment for international markets"""
+        self.logger.info("Executing Global Compliance Assessment")
+        
+        try:
+            # Define data types involved in startup operations
+            data_types = [
+                DataClassification.PERSONAL,           # User data
+                DataClassification.SENSITIVE_PERSONAL, # Payment/health data
+                DataClassification.CONFIDENTIAL        # Business data
+            ]
+            
+            # Define target markets (global deployment)
+            target_regions = [
+                ComplianceRegion.EU,        # European market (GDPR)
+                ComplianceRegion.US,        # US market (CCPA, HIPAA)
+                ComplianceRegion.SINGAPORE, # APAC market (PDPA)
+                ComplianceRegion.CANADA     # Canadian market (PIPEDA)
+            ]
+            
+            # Perform comprehensive compliance assessment
+            compliance_assessments = await self.global_compliance_engine.assess_compliance(
+                data_types=data_types,
+                regions=target_regions
+            )
+            
+            # Calculate compliance metrics
+            total_assessments = len(compliance_assessments)
+            compliant_count = sum(1 for assessment in compliance_assessments if assessment.compliant)
+            compliance_rate = compliant_count / total_assessments if total_assessments > 0 else 0.0
+            avg_compliance_score = sum(a.score for a in compliance_assessments) / total_assessments if total_assessments > 0 else 0.0
+            
+            # Store compliance results
+            result.global_compliance_assessment = {
+                'total_assessments': total_assessments,
+                'compliant_assessments': compliant_count,
+                'compliance_rate': compliance_rate,
+                'average_score': avg_compliance_score,
+                'target_regions': [region.value for region in target_regions],
+                'assessments': [
+                    {
+                        'framework': assessment.framework.value,
+                        'region': assessment.region.value,
+                        'compliant': assessment.compliant,
+                        'score': assessment.score,
+                        'violations': assessment.violations,
+                        'recommendations': assessment.recommendations
+                    }
+                    for assessment in compliance_assessments
+                ],
+                'global_ready': compliance_rate >= 0.8 and avg_compliance_score >= 0.9
+            }
+            
+            # Validate data residency requirements
+            residency_validations = {}
+            for source_region in target_regions:
+                for target_region in target_regions:
+                    if source_region != target_region:
+                        residency_key = f"{source_region.value}_to_{target_region.value}"
+                        residency_result = await self.global_compliance_engine.ensure_data_residency(
+                            data_types=data_types,
+                            source_region=source_region,
+                            target_region=target_region
+                        )
+                        residency_validations[residency_key] = residency_result
+            
+            result.data_residency_validations = residency_validations
+            
+            self.logger.info(f"Global compliance assessment completed: "
+                           f"compliance_rate={compliance_rate:.1%}, "
+                           f"avg_score={avg_compliance_score:.3f}, "
+                           f"global_ready={result.global_compliance_assessment['global_ready']}")
+                           
+        except Exception as e:
+            result.phases_failed.append("global_compliance_assessment")
+            result.errors.append(f"Global compliance assessment failed: {str(e)}")
+            self.logger.error(f"Global compliance assessment failed: {e}")
+            
+            # Add placeholder compliance result
+            result.global_compliance_assessment = {
+                'compliance_rate': 0.0,
+                'global_ready': False,
+                'error': str(e)
+            }
 
     async def _execute_phase_3(
         self,
