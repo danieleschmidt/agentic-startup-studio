@@ -1,0 +1,91 @@
+{
+  "session_id": "quality_session_1755955438",
+  "quality_level": "enterprise",
+  "timestamp": "2025-08-23T13:23:58.920983",
+  "overall_score": 55.229451347830874,
+  "overall_status": "failed",
+  "total_execution_time": 1.0201959609985352,
+  "quality_gates": {
+    "code_quality": {
+      "status": "warning",
+      "score": 86.13207858363134,
+      "execution_time": 0.6349241733551025,
+      "issues_count": 20,
+      "recommendations_count": 3,
+      "details": {
+        "total_files": 42,
+        "total_lines": 36626,
+        "total_functions": 676,
+        "total_classes": 304,
+        "complexity_violations": 0,
+        "line_length_violations": 117,
+        "function_length_violations": 21,
+        "class_length_violations": 17,
+        "docstring_coverage": 16.020408163265305
+      }
+    },
+    "functionality_tests": {
+      "status": "failed",
+      "score": 0.0,
+      "execution_time": 0.07916617393493652,
+      "issues_count": 3,
+      "recommendations_count": 2,
+      "details": {
+        "total_modules": 3,
+        "importable_modules": 0,
+        "functional_modules": 0,
+        "test_results": [
+          {
+            "module": "pipeline.core.breakthrough_research_engine",
+            "importable": false,
+            "functional": false,
+            "classes": [],
+            "functions": [],
+            "error": "Functionality test error: invalid decimal literal (breakthrough_research_engine.py, line 1130)"
+          },
+          {
+            "module": "pipeline.infrastructure.enterprise_resilience_framework",
+            "importable": false,
+            "functional": false,
+            "classes": [],
+            "functions": [],
+            "error": "Import error: No module named 'pydantic'"
+          },
+          {
+            "module": "pipeline.core.quantum_scale_orchestrator",
+            "importable": false,
+            "functional": false,
+            "classes": [],
+            "functions": [],
+            "error": "Import error: No module named 'pydantic'"
+          }
+        ]
+      }
+    },
+    "security_scan": {
+      "status": "failed",
+      "score": 58.02325581395348,
+      "execution_time": 0.30546140670776367,
+      "issues_count": 7,
+      "recommendations_count": 1,
+      "details": {
+        "total_files": 43,
+        "files_scanned": 43,
+        "vulnerabilities_found": 7,
+        "vulnerability_types": {
+          "unsafe_eval": 7
+        },
+        "clean_files": 40
+      }
+    }
+  },
+  "summary": {
+    "gates_executed": 3,
+    "gates_passed": 0,
+    "gates_failed": 2,
+    "gates_with_warnings": 1,
+    "total_issues": 30,
+    "total_recommendations": 6,
+    "quality_level_met": false
+  }
+}
