@@ -1,0 +1,108 @@
+{
+  "quality_gate_id": "e3d4a6d6413b",
+  "timestamp": "2025-08-24T14:16:04.530727",
+  "latest_execution": {
+    "gate_id": "comprehensive_gate_1756044963",
+    "status": "passed",
+    "execution_time": 1.3956596851348877,
+    "quality_score": 0.8282051282051283
+  },
+  "summary_metrics": {
+    "total_tests": 39,
+    "passed_tests": 35,
+    "failed_tests": 0,
+    "warning_tests": 1,
+    "pass_rate": 0.8974358974358975,
+    "failure_rate": 0.0,
+    "overall_coverage": 89.74358974358975,
+    "coverage_by_level": {
+      "unit": 100.0,
+      "integration": 100.0,
+      "end_to_end": 0.0,
+      "performance": 100.0,
+      "security": 33.33333333333333,
+      "compliance": 0.0,
+      "breakthrough": 0.0
+    },
+    "metrics_by_level": {
+      "unit": {
+        "total": 17,
+        "passed": 17,
+        "pass_rate": 1.0
+      },
+      "integration": {
+        "total": 13,
+        "passed": 13,
+        "pass_rate": 1.0
+      },
+      "performance": {
+        "total": 3,
+        "passed": 3,
+        "pass_rate": 1.0
+      },
+      "security": {
+        "total": 6,
+        "passed": 2,
+        "pass_rate": 0.3333333333333333
+      }
+    },
+    "average_performance": 0.03989672660827637,
+    "security_score": 0.3333333333333333,
+    "overall_quality_score": 0.8282051282051283
+  },
+  "quality_trends": {
+    "trend": "insufficient_data"
+  },
+  "test_breakdown": {
+    "unit": {
+      "total": 17,
+      "passed": 17,
+      "failed": 0,
+      "warnings": 0,
+      "average_execution_time": 0.0003244175630457261
+    },
+    "integration": {
+      "total": 13,
+      "passed": 13,
+      "failed": 0,
+      "warnings": 0,
+      "average_execution_time": 6.400621854341947e-05
+    },
+    "performance": {
+      "total": 3,
+      "passed": 3,
+      "failed": 0,
+      "warnings": 0,
+      "average_execution_time": 0.03989672660827637
+    },
+    "security": {
+      "total": 6,
+      "passed": 2,
+      "failed": 0,
+      "warnings": 1,
+      "average_execution_time": 0.2112178405125936
+    }
+  },
+  "recommendations": [
+    "Improve end_to_end test coverage (currently 0.0%)",
+    "Improve security test coverage (currently 33.3%)",
+    "Improve compliance test coverage (currently 0.0%)",
+    "Improve breakthrough test coverage (currently 0.0%)"
+  ],
+  "compliance_status": {
+    "overall_compliant": true,
+    "compliance_score": 0.75,
+    "compliance_checks": {
+      "minimum_coverage": true,
+      "maximum_failure_rate": true,
+      "performance_acceptable": true,
+      "security_score_met": false
+    },
+    "compliance_level": "medium"
+  },
+  "next_actions": [
+    "Address security vulnerabilities and improve security testing",
+    "\u2705 Quality gates passed - ready for deployment",
+    "Consider implementing additional breakthrough validation tests"
+  ]
+}
