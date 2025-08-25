@@ -1,36 +1,36 @@
 {
   "overall_status": "healthy",
-  "timestamp": "2025-06-18T20:17:31.815482+00:00",
+  "timestamp": "2025-08-25T21:47:07.076338+00:00",
   "checks": {
     "basic_imports": {
       "status": "healthy",
       "message": "Basic imports successful",
-      "timestamp": "2025-06-18T20:17:31.813120+00:00"
+      "timestamp": "2025-08-25T21:47:07.075298+00:00"
     },
     "pipeline_exists": {
       "status": "healthy",
-      "message": "Pipeline directory exists with 14 items",
-      "timestamp": "2025-06-18T20:17:31.813820+00:00"
+      "message": "Pipeline directory exists with 25 items",
+      "timestamp": "2025-08-25T21:47:07.075609+00:00"
     },
     "pipeline_init": {
       "status": "healthy",
       "message": "Pipeline __init__.py exists",
-      "timestamp": "2025-06-18T20:17:31.814074+00:00"
+      "timestamp": "2025-08-25T21:47:07.075648+00:00"
     },
     "infrastructure_init": {
       "status": "healthy",
       "message": "Infrastructure __init__.py exists",
-      "timestamp": "2025-06-18T20:17:31.814296+00:00"
+      "timestamp": "2025-08-25T21:47:07.075859+00:00"
     },
     "adapter_files": {
       "status": "healthy",
       "message": "Found 4 adapter files: ['base_adapter.py', 'flyio_adapter.py', 'google_ads_adapter.py', 'posthog_adapter.py']",
-      "timestamp": "2025-06-18T20:17:31.815044+00:00"
+      "timestamp": "2025-08-25T21:47:07.076289+00:00"
     },
     "simple_health_module": {
       "status": "healthy",
-      "message": "Simple health module exists (7428 bytes)",
-      "timestamp": "2025-06-18T20:17:31.815453+00:00"
+      "message": "Simple health module exists (6946 bytes)",
+      "timestamp": "2025-08-25T21:47:07.076330+00:00"
     }
   },
   "summary": {
