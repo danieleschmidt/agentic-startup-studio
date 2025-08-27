@@ -1,0 +1,64 @@
+{
+  "validation_status": "PARTIAL_SUCCESS",
+  "production_ready": false,
+  "total_tests": 5,
+  "passed_tests": 1,
+  "failed_tests": 4,
+  "success_rate": 0.2,
+  "total_duration": 0.00011801719665527344,
+  "generation_availability": {
+    "generation_1": false,
+    "generation_2": false,
+    "generation_3": false
+  },
+  "test_results": [
+    {
+      "test_name": "generation_1_availability",
+      "status": "FAILED",
+      "duration": 1.6689300537109375e-06,
+      "error": "Generation 1 modules not available",
+      "data": {},
+      "timestamp": "2025-08-27T20:34:38.454204"
+    },
+    {
+      "test_name": "generation_2_availability",
+      "status": "FAILED",
+      "duration": 7.152557373046875e-07,
+      "error": "Generation 2 modules not available",
+      "data": {},
+      "timestamp": "2025-08-27T20:34:38.454228"
+    },
+    {
+      "test_name": "generation_3_availability",
+      "status": "FAILED",
+      "duration": 7.152557373046875e-07,
+      "error": "Generation 3 modules not available",
+      "data": {},
+      "timestamp": "2025-08-27T20:34:38.454233"
+    },
+    {
+      "test_name": "multi_generation_integration",
+      "status": "FAILED",
+      "duration": 4.76837158203125e-06,
+      "error": "At least one generation should be available",
+      "data": {},
+      "timestamp": "2025-08-27T20:34:38.454236"
+    },
+    {
+      "test_name": "quality_gates",
+      "status": "SUCCESS",
+      "duration": 6.67572021484375e-06,
+      "error": null,
+      "data": {
+        "quality_gates": {
+          "integration_success": true
+        },
+        "gates_passed": 0,
+        "total_gates": 0,
+        "pass_rate": 0
+      },
+      "timestamp": "2025-08-27T20:34:38.454239"
+    }
+  ],
+  "timestamp": "2025-08-27T20:34:38.454302"
+}
