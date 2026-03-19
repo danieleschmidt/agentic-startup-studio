@@ -1,1 +1,0 @@
-# Contract testing for Agentic Startup Studio

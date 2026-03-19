@@ -1,1 +1,0 @@
-# Test helpers for Agentic Startup Studio
